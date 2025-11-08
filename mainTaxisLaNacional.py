@@ -3,7 +3,7 @@ from sqlite3 import Error
 
 def conexionDB():
     try:
-        con=sqlite3.connect('BDEjemplo.db')
+        con=sqlite3.connect('BDTaxisLaNacional.db')
         # creamos un objeto de conexión con que crea el repositorio
         # físico de la base de datos (archivo físico)
         return con
@@ -12,6 +12,9 @@ def conexionDB():
 
 def cerrarBD(con):
     con.close()
+#============================================================================================
+#----------------------------VEHICULOS-------------------------------------------------------
+#============================================================================================
 
 def crearTablaVehiculos(con):
     cursorObj=con.cursor()
@@ -28,7 +31,7 @@ def crearTablaVehiculos(con):
                                 color text NOT NULL,
                                 concesionario text NOT NULL,
                                 fechaCompraVehiculo date NOT NULL, 
-                                tiempoGarantía integer NOT NULL,
+                                tiempoGarantia integer NOT NULL,
                                 fechaCompraPoliza date NOT NULL,
                                 proveedorPoliza text NOT NULL,
                                 fechaCompraSegObliga date NOT NULL,
@@ -42,68 +45,86 @@ def crearTablaVehiculos(con):
     #4. Asegurar la persistencia:  llamamos al método commit()
     #del objeto conexión
 
-def crearTablaVehiculos1(con):
+def crearConductor(con,duct):    
     cursorObj=con.cursor()
-    #1.  Es un objeto que recorre toda el repositorio de
-    #base de datos.  Utiliza para ello el objeto de conexión
-    #que ya habíamos creado.
-    #2.  Creamos la cadena con el SQL a ejecutar
-    cursorObj.execute('''CREATE TABLE IF NOT EXISTS vehiculos(
-                                placa text NOT NULL,
-                                marca text NOT NULL, 
-                                referencia text NOT NULL,
-                                modelo integer NOT NULL,
-                                numeroChasis text NOT NULL,
-                                numeroMotor text NOT NULL,
-                                color text NOT NULL,
-                                concesionario text NOT NULL,
-                                fechaCompraVehiculo date NOT NULL, 
-                                tiempoGarantía integer NOT NULL,
-                                fechaCompraPoliza date NOT NULL,
-                                proveedorPoliza text NOT NULL,
-                                fechaCompraSegObliga date NOT NULL,
-                                proveedorSegObliga text NOT NULL,
-                                activo integer NOT NULL,
-                                PRIMARY KEY(placa))''')
-    #3.  Ejecutamos la cadena
+    cursorObj.execute('''INSERT INTO infoConductor
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
     con.commit()
-    #4. Asegurar la persistencia:  llamamos al método commit()
-    #del objeto conexión
 
-def insertarVehiculos(con):
+def leerInfoVehiculo():
+    placa=input("Placa vehiculo: ")
+    marca=input("Marca: ")
+    referencia=input("Referencia: ")
+    modelo=input("Modelo: ")
+    numeroChasis=input("Numero Chasis: ")
+    numeroMotor=input("Numero de motor: ")
+    color=input("Color: ")
+    concesionario=input("Concensionario: ")
+    fechaCompra=input("Fecha de compra: ")
+    tiempoGarantia=input("Tiempo garantia: ")
+    fechaCompraPoliza=input("Fecha compra poliza ")
+    proveedorPoliza=input("Proveedor poliza: ")
+    fechaCompraSeguroOblig=input("Fecha de compra seguro: ")
+    proveedorSeguroOblig=input("Direccion: ")
+    indicadorActivo=input("Estado del vehiculo: ")
+    conductor=(placa,marca,referencia,modelo,numeroChasis,numeroMotor,color,concesionario,fechaCompra,tiempoGarantia,fechaCompraPoliza,proveedorPoliza,fechaCompraSeguroOblig,indicadorActivo)
+    print("La tupla conductor es; ",conductor)
+    return conductor
+#============================================================================================
+#----------------------------CONDUCTORES-----------------------------------------------------
+#============================================================================================
+
+def crearTablaConductores(con):    
     cursorObj=con.cursor()
-    #1.  Es un objeto que recorre toda el repositorio de
-    #base de datos.  Utiliza para ello el objeto de conexión
-    #que ya habíamos creado.
-    cad='''INSERT INTO vehiculos VALUES ("LSV252",
-                                        "RENAULT",
-                                        "SYMBOL",
-                                        2014,
-                                        "123asd",
-                                        "456lki",
-                                        "BLANCO",
-                                        "Los Coches",
-                                        "12/09/2013",
-                                        36,
-                                        "12/09/2013",
-                                        "Seguros del Estado",
-                                        "12/09/2013",
-                                        "Seguros del Estado",
-                                        1)
-    '''
-    #2.  Creamos la cadena con el SQL a ejecutar
-    cursorObj.execute(cad)
-    #3.  Ejecutamos la cadena
+    cursorObj.execute('''CREATE TABLE IF NOT EXISTS infoConductor(
+                                identificacion integer NOT NULL,
+                                nombre text NOT NULL, 
+                                apellido text NOT NULL,
+                                direccion text NOT NULL,
+                                telefono integer NOT NULL,
+                                correo text NOT NULL,
+                                fechaIngreso date NOT NULL,
+                                fechaRetiro date NULL,
+                                indicadorContratado integer NOT NULL,
+                                turno integer NOT NULL,
+                                valorTurno integer NOT NULL,
+                                valorAhorro integer NOT NULL,
+                                valorAdeuda integer NOT NULL,
+                                totalAhorrado integer NOT NULL,
+                                PRIMARY KEY(identificacion))''')
     con.commit()
-    #4. Asegurar la persistencia:  llamamos al método commit()
-    #del objeto conexión
-    
-def crearTablaMantenimiento(con):   
-    #1.  Es un objeto que recorre toda el repositorio de
-    #base de datos.  Utiliza para ello el objeto de conexión
-    #que ya habíamos creado.   
+
+def crearConductor(con,duct):    
     cursorObj=con.cursor()
-    #2 y 3  Creamos la cadena con el SQL a ejecutar
+    cursorObj.execute('''INSERT INTO infoConductor
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
+    con.commit()
+
+def leerInfoConductor():
+    noConductor=input("Identificacion Conductor: ")
+    nombre=input("Nombre: ")
+    apellido=input("Apellido: ")
+    direccion=input("Direccion: ")
+    telefono=input("Telefono: ")
+    correo=input("Correo: ")
+    fecIngreso="20/10/2025"
+    fecRetiro=("20/10/2025")
+    indContrato=input("Indicador contrato: ")
+    turno=input("Turno: ")
+    valorTurno=input("Valor del turno: ")
+    valorAhorro=input("Valor Ahorro: ")
+    valorAdeuda=input("Valor a deuda: ")
+    totalAhorrado=input("Total Ahorrado: ")
+    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
+    print("La tupla conductor es; ",conductor)
+    return conductor
+    
+#============================================================================================
+#----------------------------MANTENIMIENTO---------------------------------------------------
+#============================================================================================
+
+def crearTablaMantenimientos(con):     
+    cursorObj=con.cursor()
     cursorObj.execute('''CREATE TABLE IF NOT EXISTS mantenimientoVehiculo(
                                 numeroOrden integer NOT NULL,
                                 placaVehiculo text NOT NULL, 
@@ -113,8 +134,6 @@ def crearTablaMantenimiento(con):
                                 valorFacturado integer NOT NULL,
                                 fechaServicio date NOT NULL,
                                 PRIMARY KEY(numeroOrden))''')
-    #4. Asegurar la persistencia:  llamamos al método commit()
-    #del objeto conexión
     con.commit()
 
 def leerInfoMantenimiento():
@@ -172,7 +191,6 @@ def actualizarMantenimientoRealizado(con):
 
     con.commit()
     print("Registro actualizado correctamente.")
-
 
 def consultarMantenimientoRealizado(con):
     cursorObj=con.cursor()
@@ -236,65 +254,12 @@ def consultarMantenimientoRealizado3(con):
         print("La maxima fecha de servicio es: ",maximafechaServicio)
     #print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
 
-def borrarMantenimiento(con):
-    noOrden = input("Ingrese el número de orden a eliminar: ")
-    cursorObj=con.cursor()
-    cursorObj.execute("DELETE FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden, ))
-    con.commit()
-
-def borrarTablaVehiculos(con):
-    cursorObj=con.cursor()
-    cad='''DROP TABLE Vehiculos'''
-    print("cadena: ",cad)
-    cursorObj.execute(cad)
-    con.commit()
-
-def crearTablaConductor(con):    
-    cursorObj=con.cursor()
-    cursorObj.execute('''CREATE TABLE IF NOT EXISTS infoConductor(
-                                identificacion integer NOT NULL,
-                                nombre text NOT NULL, 
-                                apellido text NOT NULL,
-                                direccion text NOT NULL,
-                                telefono integer NOT NULL,
-                                correo integer NOT NULL,
-                                fechaIngreso date NOT NULL,
-                                fechaRetiro date NOT NULL,
-                                indicadorContratado integer NOT NULL
-                                turno integer NOT NULL
-                                valorTurno integer NOT NULL
-                                valorAhorro integer NOT NULL
-                                valorAdeuda integer NOT NULL
-                                totalAhorrado integer NOT NULL
-                                PRIMARY KEY(identificacion))''')
-    con.commit()
-
-def crearConductor(con,duct):    
-    cursorObj=con.cursor()
-    cursorObj.execute('''INSERT INTO infoConductor
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
-    con.commit()
-
-def leerInfoConductor():
-    noConductor=input("Identificacion Conductor: ")
-    nombre=input("Nombre: ")
-    apellido=input("Apellido: ")
-    direccion=input("Direccion: ")
-    telefono=input("Telefono: ")
-    correo=input("Correo: ")
-    fecIngreso="20/10/2025"
-    fecRetiro=("20/10/2025")
-    indContrato=input("Indicador contrato: ")
-    turno=input("Turno: ")
-    valorTurno=input("Valor del turno: ")
-    valorAhorro=input("Valor Ahorro: ")
-    valorAdeuda=input("Valor a deuda: ")
-    totalAhorrado=input("Total Ahorrado: ")
-    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
-    print("La tupla conductor es; ",conductor)
-    return conductor
+#============================================================================================
+#----------------------------MENU------------------------------------------------------------
+#============================================================================================
 
 def menu(con):
+
     salirPrincipal=False
     while not salirPrincipal:
         opcPrincipal=input('''
@@ -308,7 +273,30 @@ def menu(con):
 
                     Selecciones una opcion: >>> ''')
         if (opcPrincipal=='1'):
-            salirPrincipal=True
+            salirVehiculos=False
+            while not salirVehiculos:
+                opcVehiculos=input('''
+                                MENU DE ADMINISTRACION DE VEHICULOS
+
+                                1- Crear un nuevo vehiculo
+                                2- Actualizar informacion de vehiculo
+                                3- Consultar informacion de un vehiculo
+                                4- Actualizar informacion polizas de seguro
+                                5- Retornar al menu principal
+
+                                Seleccione una opccion: >>>''')
+                if (opcVehiculos=='1'):
+                    miVehiculo=leerInfoVehiculo()
+                    crearVehiculo(con,miVehiculo)
+                elif (opcVehiculos=='2'):
+                    salirVehiculos=True
+                elif (opcVehiculos=='3'):
+                    salirVehiculos=True
+                elif (opcVehiculos=='4'):
+                    salirVehiculos=True
+                elif (opcVehiculos=='5'):
+                    salirVehiculos=True
+            
         elif (opcPrincipal=='2'):
             salirConductores=False
             while not salirConductores:
@@ -359,8 +347,10 @@ def menu(con):
 
 def main():
     miCon=conexionDB()
+    crearTablaVehiculos(miCon)
+    crearTablaConductores(miCon)
+    crearTablaMantenimientos(miCon)
     menu(miCon)
-    #crearTablaVehiculos(miCon)
     #crearTablaVehiculos1(miCon)
     #insertarVehiculos(miCon)
     #crearTablaMantenimiento(miCon)
