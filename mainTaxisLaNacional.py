@@ -15,12 +15,16 @@ def cerrarBD(con):
 
 def pedirFecha(mensaje):
     while True:
-        fechaStr = input(mensaje)
+        fecha_str = input(mensaje)  
         try:
-            fechaDt = datetime.strptime(fechaStr,"%Y/%m/%d").date()
-            return fechaDt.strftime("%Y/%m/%d")
+            # Convertimos de DD/MM/YYYY a datetime.date
+            fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+            # Retornamos como string AAAA-MM-DD para la BD
+            return fecha_obj.strftime("%Y-%m-%d")
         except ValueError:
-            print("Formato invalido. use AAAA/MM/DD")
+            print("Formato inválido. Debe ser DD/MM/YYYY.")
+
+
     
 #============================================================================================
 #----------------------------VEHICULOS-------------------------------------------------------
@@ -61,6 +65,14 @@ def crearVehiculo(con,duct):
                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
     con.commit()
 
+def validarEstado(mensaje):
+    while True:
+        indicadorActivo = input(mensaje)
+        if indicadorActivo in ["1","2"]:
+            return indicadorActivo
+        else:
+            print("Estado invalido. Por favor seleccione Activo[1] Inactivo[2] ")
+
 def leerInfoVehiculo():
     placa=input("Placa vehiculo: ")
     marca=input("Marca: ")
@@ -69,17 +81,89 @@ def leerInfoVehiculo():
     numeroChasis=input("Numero Chasis: ")
     numeroMotor=input("Numero de motor: ")
     color=input("Color: ")
-    concesionario=input("Concensionario: ")
+    concesionario=input("Concesionario: ")
     fechaCompra= pedirFecha ("Fecha de compra: ")
     tiempoGarantia=input("Tiempo garantia: ")
     fechaCompraPoliza= pedirFecha("Fecha compra poliza ")
     proveedorPoliza=input("Proveedor poliza: ")
     fechaCompraSeguroOblig= pedirFecha("Fecha de compra seguro: ")
     proveedorSeguroOblig=input("Proveedor de seguro: ")
-    indicadorActivo=input("Estado del vehiculo: ")
+    indicadorActivo=validarEstado("Estado: Activo[1] Inactivo[2])")
     vehiculo=(placa,marca,referencia,modelo,numeroChasis,numeroMotor,color,concesionario,fechaCompra,tiempoGarantia,fechaCompraPoliza,proveedorPoliza,fechaCompraSeguroOblig,proveedorSeguroOblig,indicadorActivo)
-    print("La tupla vehiculo es; ",vehiculo)
     return vehiculo
+
+def validarPlaca(con, mensaje):
+    cursorObj = con.cursor()
+    while True:
+        placa=input(mensaje)
+        cursorObj.execute("SELECT * FROM infoVehiculos WHERE placa=?", (placa,))
+        placaVehiculo = cursorObj.fetchone()
+
+        if placaVehiculo is None:
+            print("La placa ingresada no se encuentra registrada. Por favor ingrese una placa valida")
+        else:
+            print("Placa registrada")
+            return placaVehiculo
+
+def consultarVehiculo(con):
+    veh = validarPlaca(con,"Ingrese el numero de placa a validar: ")
+    print("----------------------------------------------------")
+    print("Informacion asociada al vehiculo con numero de placa",veh[0])
+    print("----------------------------------------------------")
+    print("Marca:", veh[1])
+    print("Referencia:", veh[2])
+    print("Modelo:", veh[3])
+    print("Numero de chasis:", veh[4])
+    print("Numero de motor:", veh[5])
+    print("Color:", veh[6])
+    print("Concesionario:", veh[7])
+    print("Fecha de compra:", veh[8])
+    print("Garantia: ", veh[9],"meses")
+    print("Fecha de compra poliza:", veh[10])
+    print("Proveedor de poliza:", veh[11])
+    print("Fecha de compra seguro:", veh[12])
+    print("Proveedor de seguro:", veh[13])
+    print("Indicador:", veh[14])
+    print("---------------------------")
+
+def modificarPoliza(con):
+    cursorObj = con.cursor()
+    veh = validarPlaca(con, "Indique la placa del vehículo a modificar: ")
+    placa = veh[0]
+    fechaAnteriorPoliza = datetime.strptime(veh[10], "%Y-%m-%d").date()
+
+    while True:
+        nuevaFecComPoliza = pedirFecha("Ingrese nueva fecha de compra de la póliza (DD/MM/YYYY): ")
+        nuevaFecComPolizaDate = datetime.strptime(nuevaFecComPoliza, "%Y-%m-%d").date()
+        
+        if nuevaFecComPolizaDate > fechaAnteriorPoliza:
+            cursorObj.execute('''
+                UPDATE infoVehiculos
+                SET fechaCompraPoliza = ?
+                WHERE placa = ?
+            ''', (nuevaFecComPoliza, placa))
+            con.commit()
+            print("Póliza actualizada correctamente.")
+        else:
+            print("La nueva fecha debe ser mayor que la fecha actual.")
+            
+
+        
+def modificarIndicador(con):
+    cursorObj = con.cursor()
+    veh = validarPlaca(con, "Indique el número de placa del vehículo a modificar: ")
+    placa = veh[0]
+    nuevoEstado = validarEstado("Nuevo estado: Activo[1] Inactivo[2]: ")
+
+    cursorObj.execute('''
+        UPDATE infoVehiculos
+        SET activo = ?
+        WHERE placa = ?
+    ''', (nuevoEstado, placa))
+
+    con.commit()
+    print("Estado actualizado correctamente.")
+
 #============================================================================================
 #----------------------------CONDUCTORES-----------------------------------------------------
 #============================================================================================
@@ -291,22 +375,35 @@ def menu(con):
                                 MENU DE ADMINISTRACION DE VEHICULOS
 
                                 1- Crear un nuevo vehiculo
-                                2- Actualizar informacion de vehiculo
-                                3- Consultar informacion de un vehiculo
-                                4- Actualizar informacion polizas de seguro
-                                5- Retornar al menu principal
+                                2- Consultar informacion de un vehiculo
+                                3- Actualizar informacion de vehiculo
+                                4- Retornar al menu principal
 
                                 Seleccione una opccion: >>>''')
                 if (opcVehiculos=='1'):
                     miVehiculo=leerInfoVehiculo()
                     crearVehiculo(con,miVehiculo)
                 elif (opcVehiculos=='2'):
-                    salirVehiculos=True
+                    consultarVehiculo(con)
                 elif (opcVehiculos=='3'):
-                    salirVehiculos=True
+                    salirActVehiculos=False
+                    while not salirActVehiculos:
+                        opcActVehiculos=input('''
+                                MENU DE ADMINISTRACION DE ACTUALIZACION DE VEHICULOS
+                                ¿QUE DESEA MODIFICAR?
+                                
+                                1- Estado del vehiculo
+                                2- Informacion de la poliza de seguro
+                                3- Retornar al menu de administracion de vehiculos
+
+                                Seleccione una opccion: >>>''')
+                        if(opcActVehiculos=='1'):
+                            modificarIndicador(con)
+                        elif(opcActVehiculos=='2'):
+                            modificarPoliza(con)
+                        elif(opcActVehiculos=='3'):
+                            salirActVehiculos=True
                 elif (opcVehiculos=='4'):
-                    salirVehiculos=True
-                elif (opcVehiculos=='5'):
                     salirVehiculos=True
             
         elif (opcPrincipal=='2'):
