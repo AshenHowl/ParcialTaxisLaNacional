@@ -1,6 +1,6 @@
 import sqlite3
 from sqlite3 import Error
-
+from datetime import datetime
 def conexionDB():
     try:
         con=sqlite3.connect('BDTaxisLaNacional.db')
@@ -12,6 +12,16 @@ def conexionDB():
 
 def cerrarBD(con):
     con.close()
+
+def pedirFecha(mensaje):
+    while True:
+        fechaStr = input(mensaje)
+        try:
+            fechaDt = datetime.strptime(fechaStr,"%Y/%m/%d").date()
+            return fechaDt.strftime("%Y/%m/%d")
+        except ValueError:
+            print("Formato invalido. use AAAA/MM/DD")
+    
 #============================================================================================
 #----------------------------VEHICULOS-------------------------------------------------------
 #============================================================================================
@@ -21,7 +31,7 @@ def crearTablaVehiculos(con):
     #1.  Es un objeto que recorre toda el repositorio de
     #base de datos.  Utiliza para ello el objeto de conexión
     #que ya habíamos creado.
-    cad='''CREATE TABLE IF NOT EXISTS vehiculos(
+    cad='''CREATE TABLE IF NOT EXISTS infoVehiculos(
                                 placa text NOT NULL,
                                 marca text NOT NULL, 
                                 referencia text NOT NULL,
@@ -45,10 +55,10 @@ def crearTablaVehiculos(con):
     #4. Asegurar la persistencia:  llamamos al método commit()
     #del objeto conexión
 
-def crearConductor(con,duct):    
+def crearVehiculo(con,duct):    
     cursorObj=con.cursor()
-    cursorObj.execute('''INSERT INTO infoConductor
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
+    cursorObj.execute('''INSERT INTO infoVehiculos
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
     con.commit()
 
 def leerInfoVehiculo():
@@ -60,16 +70,16 @@ def leerInfoVehiculo():
     numeroMotor=input("Numero de motor: ")
     color=input("Color: ")
     concesionario=input("Concensionario: ")
-    fechaCompra=input("Fecha de compra: ")
+    fechaCompra= pedirFecha ("Fecha de compra: ")
     tiempoGarantia=input("Tiempo garantia: ")
-    fechaCompraPoliza=input("Fecha compra poliza ")
+    fechaCompraPoliza= pedirFecha("Fecha compra poliza ")
     proveedorPoliza=input("Proveedor poliza: ")
-    fechaCompraSeguroOblig=input("Fecha de compra seguro: ")
-    proveedorSeguroOblig=input("Direccion: ")
+    fechaCompraSeguroOblig= pedirFecha("Fecha de compra seguro: ")
+    proveedorSeguroOblig=input("Proveedor de seguro: ")
     indicadorActivo=input("Estado del vehiculo: ")
-    conductor=(placa,marca,referencia,modelo,numeroChasis,numeroMotor,color,concesionario,fechaCompra,tiempoGarantia,fechaCompraPoliza,proveedorPoliza,fechaCompraSeguroOblig,indicadorActivo)
-    print("La tupla conductor es; ",conductor)
-    return conductor
+    vehiculo=(placa,marca,referencia,modelo,numeroChasis,numeroMotor,color,concesionario,fechaCompra,tiempoGarantia,fechaCompraPoliza,proveedorPoliza,fechaCompraSeguroOblig,proveedorSeguroOblig,indicadorActivo)
+    print("La tupla vehiculo es; ",vehiculo)
+    return vehiculo
 #============================================================================================
 #----------------------------CONDUCTORES-----------------------------------------------------
 #============================================================================================
@@ -83,6 +93,7 @@ def crearTablaConductores(con):
                                 direccion text NOT NULL,
                                 telefono integer NOT NULL,
                                 correo text NOT NULL,
+                                placaVehiculo text NOT NULL,
                                 fechaIngreso date NOT NULL,
                                 fechaRetiro date NULL,
                                 indicadorContratado integer NOT NULL,
@@ -97,7 +108,7 @@ def crearTablaConductores(con):
 def crearConductor(con,duct):    
     cursorObj=con.cursor()
     cursorObj.execute('''INSERT INTO infoConductor
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
     con.commit()
 
 def leerInfoConductor():
@@ -107,15 +118,16 @@ def leerInfoConductor():
     direccion=input("Direccion: ")
     telefono=input("Telefono: ")
     correo=input("Correo: ")
-    fecIngreso="20/10/2025"
-    fecRetiro=("20/10/2025")
+    placaVehiculo=input("Placa vehiculo: ")
+    fecIngreso=pedirFecha("Fecha de ingreso: ")
+    fecRetiro=pedirFecha("Fecha de retiro: ")
     indContrato=input("Indicador contrato: ")
     turno=input("Turno: ")
     valorTurno=input("Valor del turno: ")
     valorAhorro=input("Valor Ahorro: ")
     valorAdeuda=input("Valor a deuda: ")
     totalAhorrado=input("Total Ahorrado: ")
-    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
+    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,placaVehiculo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
     print("La tupla conductor es; ",conductor)
     return conductor
     
@@ -143,7 +155,7 @@ def leerInfoMantenimiento():
     nomProveedor=input("Nombre Proveedor: ")
     desServicio=input("Servicio Recibio: ")
     ValFacturado=input("Valor Facturado: ")
-    fecServicio="20/10/2025"
+    fecServicio=pedirFecha("Fecha manteminiento: ")
     mantenimiento=(noOrden,plVehiculo,n,nomProveedor,desServicio,ValFacturado,fecServicio)
     print("La tupla mantenimiento es; ",mantenimiento)
     return mantenimiento
