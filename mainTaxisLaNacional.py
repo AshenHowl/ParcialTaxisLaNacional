@@ -144,8 +144,10 @@ def modificarPoliza(con):
             ''', (nuevaFecComPoliza, placa))
             con.commit()
             print("Póliza actualizada correctamente.")
+            break
         else:
             print("La nueva fecha debe ser mayor que la fecha actual.")
+            break
             
 
         
@@ -178,8 +180,8 @@ def crearTablaConductores(con):
                                 telefono integer NOT NULL,
                                 correo text NOT NULL,
                                 placaVehiculo text NOT NULL,
-                                fechaIngreso date NOT NULL,
-                                fechaRetiro date NULL,
+                                fechaIngreso date NULL,
+                                fechaRetiro NULL,
                                 indicadorContratado integer NOT NULL,
                                 turno integer NOT NULL,
                                 valorTurno integer NOT NULL,
@@ -195,6 +197,34 @@ def crearConductor(con,duct):
                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
     con.commit()
 
+def validarConductor(con, mensaje):
+    cursorObj = con.cursor()
+    while True:
+        conductor=input(mensaje)
+        cursorObj.execute("SELECT * FROM infoConductor WHERE identificacion=?", (identificacion,))
+        idConductor = cursorObj.fetchone()
+
+        if idConductor is None:
+            print("La identificacion no se encuentra registrada. Porfavor indique una identificacion valida")
+        else:
+            print("Identificacion registrada")
+            return idConductor
+
+def validarContrato(fecIngreso,fecRetiro):
+    while True:
+        indicador = input("Indicador contrato: Contratado[1], No contratado[2], Despedido[3]: ")
+        if indicador not in ["1","2","3"]:
+            print("Por favor elija un estado valido: Contratado[1] No contratado[2] Despedido[3]")
+            continue
+        indicador=int(indicador)
+
+        if indicador == 1 and fecIngreso is not None and fecRetiro is None:
+            return indicador
+        elif indicador == 2 and fecIngreso is None and fecRetiro is None:
+            return indicador
+        elif indicador == 3 and fecIngreso is not None and fecRetiro is not None:
+            return indicador
+
 def leerInfoConductor():
     noConductor=input("Identificacion Conductor: ")
     nombre=input("Nombre: ")
@@ -203,16 +233,24 @@ def leerInfoConductor():
     telefono=input("Telefono: ")
     correo=input("Correo: ")
     placaVehiculo=input("Placa vehiculo: ")
-    fecIngreso=pedirFecha("Fecha de ingreso: ")
-    fecRetiro=pedirFecha("Fecha de retiro: ")
-    indContrato=input("Indicador contrato: ")
+    fecIngreso_str = input("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
+    if fecIngreso_str.strip():
+        fecIngreso = pedirFecha("Fecha de ingreso (DD/MM/YYYY): ")
+    else:
+        fecIngreso = None
+
+    fecRetiro_str = input("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
+    if fecRetiro_str.strip():
+        fecRetiro = pedirFecha("Fecha de retiro (DD/MM/YYYY): ")
+    else:
+        fecRetiro = None
+    indContrato=validarContrato(fecIngreso,fecRetiro)
     turno=input("Turno: ")
     valorTurno=input("Valor del turno: ")
     valorAhorro=input("Valor Ahorro: ")
     valorAdeuda=input("Valor a deuda: ")
     totalAhorrado=input("Total Ahorrado: ")
     conductor=(noConductor,nombre,apellido,direccion,telefono,correo,placaVehiculo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
-    print("La tupla conductor es; ",conductor)
     return conductor
     
 #============================================================================================
