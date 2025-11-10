@@ -1,9 +1,11 @@
 import sqlite3
 from sqlite3 import Error
 from datetime import datetime
+import os
 def conexionDB():
     try:
         con=sqlite3.connect('BDTaxisLaNacional.db')
+        print("Base de datos", os.path.abspath("TaxisLaNacional.db"))
         # creamos un objeto de conexión con que crea el repositorio
         # físico de la base de datos (archivo físico)
         return con
@@ -191,16 +193,19 @@ def crearTablaConductores(con):
                                 PRIMARY KEY(identificacion))''')
     con.commit()
 
-def crearConductor(con,duct):    
-    cursorObj=con.cursor()
-    cursorObj.execute('''INSERT INTO infoConductor
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
-    con.commit()
-
+def crearConductor(con,duct):
+    try:   
+        cursorObj=con.cursor()
+        cursorObj.execute('''INSERT INTO infoConductor
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
+        con.commit()
+        print("Conductor guardado con exito")
+    except Excepcion as e:
+        print("Error al guardar el conductor", e) 
 def validarConductor(con, mensaje):
     cursorObj = con.cursor()
     while True:
-        conductor=input(mensaje)
+        identificacion=input(mensaje)
         cursorObj.execute("SELECT * FROM infoConductor WHERE identificacion=?", (identificacion,))
         idConductor = cursorObj.fetchone()
 
@@ -219,11 +224,87 @@ def validarContrato(fecIngreso,fecRetiro):
         indicador=int(indicador)
 
         if indicador == 1 and fecIngreso is not None and fecRetiro is None:
+            print("Estado: Contratado")
             return indicador
         elif indicador == 2 and fecIngreso is None and fecRetiro is None:
+            print("Estado: No contratado")
             return indicador
         elif indicador == 3 and fecIngreso is not None and fecRetiro is not None:
+            print("Estado: Despedido")
             return indicador
+        else:
+            print("Error:Las fechas no coinciden con el estado seleccionado, intente de nuevo")
+            print("Contratado = Fecha de ingreso pero no de salida")
+
+
+def consultconductor(con):
+    condr=validarConductor(con, "Ingrese el numero de identificacion del conductor: ")
+    print("------------------------------------")
+    print("La informacion asociada con el numero de identificacion es:",condr[0])
+    print("Nombre: ",condr[1])
+    print("Apellido: ",condr[2])
+    print("Direccion: ",condr[3])
+    print("Telefono: ",condr[4])
+    print("Correo: ",condr[5])
+    print("Placa de vehiculo: ",condr[6])
+    print("Fecha de ingreso (si aplica): ",condr[7])
+    print("Fecha de retiro (si aplica): ",condr[8])
+    print("Indicador de contrato (1:Si, 2:No, 3:Despedido)",condr[9])
+    print("Turno: ",condr[10])
+    print("Valor de el turno: ",condr[11])
+    print("Valor de ahorro: ",condr[12])
+    print("Valor a deuda: ",condr[13])
+    print("Total ahorrado: ",condr[14])
+
+
+def actConduct(con):
+    cursorObj = con.cursor()
+    condr = validarConductor(con, "Ingrese el numero de identificacion del conductor: ")
+     #Asumimos que el campo 0 es el id
+    if condr is None:
+        print("Conductor no registrado.")
+        return
+    id = condr[0]
+    print("La informacion asociada con el numero de identificacion es:",condr[0])
+    print("Nombre: ",condr[1])
+    print("Apellido: ",condr[2])
+    print("Direccion: ",condr[3])
+    print("Telefono: ",condr[4])
+    print("Correo: ",condr[5])
+    print("Placa de vehiculo: ",condr[6])
+    print("Fecha de ingreso (si aplica): ",condr[7])
+    print("Fecha de retiro (si aplica): ",condr[8])
+    print("Indicador de contrato (1:Si, 2:No, 3:Despedido)",condr[9])
+    print("Turno: ",condr[10])
+    print("Valor de el turno: ",condr[11])
+    print("Valor de ahorro: ",condr[12])
+    print("Valor a deuda: ",condr[13])
+    print("Total ahorrado: ",condr[14])
+    print("\n--- Actualización de campos ---")
+    print("Presione Enter si no desea cambiar un campo.\n")
+        # Pide nuevos valores o deja los actuales si no se escribe nada
+    #n_nombre=input(f"Nombre: [{condr[1]}]: ") or condr[1]
+    #n_apellido=input(f"Apellido: [{condr[2]}]: ") or condr[2]
+    n_direccion=input(f"Direccion: [{condr[3]}]: ") or condr[3]
+    n_telefono=input(f"Telefono: [{condr[4]}]: ") or condr[4]
+    n_correo=input(f"Correo: [{condr[5]}]: ") or condr[5]
+    #n_pl_veh=input(f"Placa de vehiculo: [{condr[6]}]: ") or condr[6]
+    n_fh_ingreso=input(f"Fecha de ingreso: [{condr[7]}]: ") or condr[7]
+    n_fh_retr=input(f"Fecha de retiro: [{condr[8]}]: ") or condr[8]
+    #n_ind_contrat=input(f"Indicador de contrato: [{condr[9]}]: ") or condr[9]
+    #n_turn=input(f"Turno: [{condr[10]}]: ") or condr[10]
+    #n_val_turn=input(f"Valor de el turno: [{condr[11]}]: ") or condr[11]
+    #n_val_ahrro=input(f"Valor de ahorro: [{condr[12]}]: ") or condr[12]
+    n_val_deuda=input(f"Valor a deuda: [{condr[13]}]: ") or condr[13]
+    n_tl_ahrrdo=input(f"Total ahorrado: [{condr[14]}]: ") or condr[14]
+         # Ejecutar actualización
+    cursorObj.execute('''
+        UPDATE infoConductor
+        SET direccion = ?, telefono = ?, correo = ?, fechaIngreso = ?, fechaRetiro = ?, valorAdeuda = ?, totalAhorrado = ?
+        WHERE identificacion = ?
+        ''', (n_direccion, n_telefono, n_correo, n_fh_ingreso, n_fh_retr, n_val_deuda, n_tl_ahrrdo, id ))    
+    con.commit()
+    print("Registro actualizado correctamente.")
 
 def leerInfoConductor():
     noConductor=input("Identificacion Conductor: ")
@@ -460,9 +541,10 @@ def menu(con):
                     miConductor=leerInfoConductor()
                     crearConductor(con,miConductor)
                 elif (opcConductores=='2'):
-                    salirConductores=True
+                    salirConductores=False
+                    actConduct(con)
                 elif (opcConductores=='3'):
-                    salirConductores=True
+                    consultconductor(con)
                 elif (opcConductores=='4'):
                     salirConductores=True
         elif (opcPrincipal=='3'):
@@ -511,7 +593,10 @@ def main():
     #borrarMantenimiento(miCon)
     #borrarTablaVehiculos(miCon)
     #crearTablaConductor(miCon)
-    #crearConductor(con,duct)
+    #cc=leerInfoConductor()
+    #crearConductor(con,cc)
+    
+    
     #leerInfoConductor()
     #cerrarDB(miCon)
     
