@@ -21,16 +21,37 @@ def conexionDB():
 def cerrarBD(con):
     con.close()
 
-def pedirFecha(mensaje):
+def pedirFechaVacia(mensaje):
+ while True:   
+    fecha_str = input(mensaje)
+    if not fecha_str.strip():
+        return None  # usuario no ingresó fecha
+    try:
+        fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+        return fecha_obj.strftime("%Y-%m-%d")
+    except ValueError:
+        fecha_str = input("Formato inválido. Ingrese fecha (DD/MM/YYYY): ")
+
+def pedirFecha(mensaje): 
     while True:
-        fecha_str = input(mensaje)  
+        fecha_str = input(mensaje)
+        if not fecha_str.strip():
+         return None #Fecha vacia = None
         try:
-            # Convertimos de DD/MM/YYYY a datetime.date
-            fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
-            # Retornamos como string AAAA-MM-DD para la BD
-            return fecha_obj.strftime("%Y-%m-%d")
+            return datetime.strptime(fecha_str, "%d/%m/%Y").date()
         except ValueError:
-            print("Formato inválido. Debe ser DD/MM/YYYY.")
+            print("Formato inválido. Use DD/MM/YYYY.")          #Para guardar en la BD
+            return pedirFecha(mensaje)       
+    
+    #while True:
+     #   fecha_str = input(mensaje)  
+      #  try:
+            # Convertimos de DD/MM/YYYY a datetime.date
+       #     fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+            # Retornamos como string AAAA-MM-DD para la BD
+        #    return fecha_obj.strftime("%Y-%m-%d")
+        #except ValueError:
+         #   print("Formato inválido. Debe ser DD/MM/YYYY.")
 
 
     
@@ -206,7 +227,7 @@ def crearConductor(con,duct):
                              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
         con.commit()
         print("Conductor guardado con exito")
-    except Excepcion as e:
+    except Exception as e:
         print("Error al guardar el conductor", e)
         
 def validarConductor(con, mensaje):
@@ -249,26 +270,30 @@ def leerInfoConductor(con):
     apellido=input("Apellido: ")
     direccion=input("Direccion: ")
     telefono=input("Telefono: ")
+    while not telefono.isdigit():
+         telefono = input("Debe ser numérico. Intente otra vez: ")
     correo=input("Correo: ")
     placaVehiculo=validarPlaca(con,"Placa vehiculo: ")
-    fecIngreso_str = input("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
-    if fecIngreso_str.strip():
-        fecIngreso = pedirFecha("Fecha de ingreso (DD/MM/YYYY): ")
-    else:
-        fecIngreso = None
+    fecIngreso = pedirFechaVacia("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
+    fecRetiro = pedirFechaVacia("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
+    #fecIngreso_str = input("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
+    #if fecIngreso_str.strip():
+    #    fecIngreso = pedirFecha("Fecha de ingreso (DD/MM/YYYY): ")
+    #else:
+     #   fecIngreso = None
 
-    fecRetiro_str = input("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
-    if fecRetiro_str.strip():
-        fecRetiro = pedirFecha("Fecha de retiro (DD/MM/YYYY): ")
-    else:
-        fecRetiro = None
+    #fecRetiro_str = input("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
+    #if fecRetiro_str.strip():
+     #   fecRetiro = pedirFecha("Fecha de retiro (DD/MM/YYYY): ")
+    #else:
+    #    fecRetiro = None
     indContrato=validarContrato(fecIngreso,fecRetiro)
     turno=input("Turno: ")
     valorTurno=input("Valor del turno: ")
     valorAhorro=input("Valor Ahorro: ")
     valorAdeuda=input("Valor a deuda: ")
     totalAhorrado=input("Total Ahorrado: ")
-    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,placaVehiculo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
+    conductor=(str(noConductor),str(nombre),str(apellido),str(direccion),str(telefono),str(correo),str(placaVehiculo),fecIngreso,fecRetiro,str(indContrato),str(turno),str(valorTurno),str(valorAhorro),str(valorAdeuda),str(totalAhorrado))
     return conductor
 
 def consultconductor(con):
