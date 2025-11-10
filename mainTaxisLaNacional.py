@@ -131,7 +131,7 @@ def consultarVehiculo(con):
     print("Proveedor de poliza:", veh[11])
     print("Fecha de compra seguro:", veh[12])
     print("Proveedor de seguro:", veh[13])
-    print("Indicador:", veh[14])
+    print("Estado del vehiculo:", veh[14])
     print("---------------------------")
 
 def modificarPoliza(con):
@@ -189,7 +189,7 @@ def crearTablaConductores(con):
                                 correo text NOT NULL,
                                 placaVehiculo text NOT NULL,
                                 fechaIngreso date NULL,
-                                fechaRetiro NULL,
+                                fechaRetiro date NULL,
                                 indicadorContratado integer NOT NULL,
                                 turno integer NOT NULL,
                                 valorTurno integer NOT NULL,
@@ -475,7 +475,7 @@ def consultarMantenimientoRealizado3(con):
     #print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
     
     def borrarMantenimiento(con):
-    cursorObj = con.cursor()
+        cursorObj = con.cursor()
     noOrden = input("Ingrese el número de orden que desea eliminar: ")
 
     cursor.execute("SELECT * FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
@@ -670,7 +670,7 @@ def menu(con):
                                 3- Actualizar informacion de vehiculo
                                 4- Retornar al menu principal
 
-                                Seleccione una opccion: >>>''')
+                                Seleccione una opcion: >>>''')
                 if (opcVehiculos=='1'):
                     miVehiculo=leerInfoVehiculo()
                     crearVehiculo(con,miVehiculo)
@@ -694,8 +694,9 @@ def menu(con):
                             modificarPoliza(con)
                         elif(opcActVehiculos=='3'):
                             salirActVehiculos=True
-                elif (opcPrincipal=='4'):
-                    generarFichaVehiculoPDF(con)
+                elif (opcVehiculos=='4'):
+                    salirVehiculos=True
+                        
 
             
         elif (opcPrincipal=='2'):
@@ -714,12 +715,12 @@ def menu(con):
                     miConductor=leerInfoConductor(con)
                     crearConductor(con,miConductor)
                 elif (opcConductores=='2'):
-                    salirConductores=False
                     actConduct(con)
                 elif (opcConductores=='3'):
                     consultconductor(con)
                 elif (opcConductores=='4'):
                     salirConductores=True
+                    
         elif (opcPrincipal=='3'):
             salirMantenimientos=False
             while not salirMantenimientos:
@@ -728,8 +729,7 @@ def menu(con):
 
                                  1- Crear un mantenimiento
                                  2- Consultar mantenimiento realizado
-                                 3- Borrar mantenimiento
-                                 4- Retornar al menu principal
+                                 3- Retornar al menu principal
 
                                  Seleccione una opcion: >>> ''')
                 if (opcMantenimientos=='1'):
@@ -738,12 +738,11 @@ def menu(con):
                 elif (opcMantenimientos=='2'):
                     consultarMantenimientoRealizado1(con)
                 elif (opcMantenimientos=='3'):
-                    borrarMantenimiento(con)
-                elif (opcMantenimientos=='4'):
                     salirMantenimientos=True
 
         elif (opcPrincipal=='4'):
-            salirPrincipal=True
+            generarFichaVehiculoPDF(con)
+            
         elif (opcPrincipal=='5'):
             salirPrincipal=True
 
