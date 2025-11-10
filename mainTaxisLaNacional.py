@@ -1,12 +1,12 @@
 import sqlite3
 from sqlite3 import Error
-from datetime import datetime
-import os
+from datetime import datetime # Fechas y horas
+import os #Verificar ruta de BD
 # --- IMPORTS PARA GENERAR PDF ---
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter # Define el tamaño y tipo de pagina
+from reportlab.lib.styles import getSampleStyleSheet #Estilo de textos predefinidos
+from reportlab.lib import colors #Colores predefinidos
 
 def conexionDB():
     try:
@@ -30,29 +30,9 @@ def pedirFechaVacia(mensaje):
         fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
         return fecha_obj.strftime("%Y-%m-%d")
     except ValueError:
-        fecha_str = input("Formato inválido. Ingrese fecha (DD/MM/YYYY): ")
+        fecha_str = input("Formato inválido. Ingrese fecha (DD/MM/YYYY): ") #Para guardar en la BD
 
-def pedirFecha(mensaje): 
-    while True:
-        fecha_str = input(mensaje)
-        if not fecha_str.strip():
-         return None #Fecha vacia = None
-        try:
-            return datetime.strptime(fecha_str, "%d/%m/%Y").date()
-        except ValueError:
-            print("Formato inválido. Use DD/MM/YYYY.")          #Para guardar en la BD
-            return pedirFecha(mensaje)       
     
-    #while True:
-     #   fecha_str = input(mensaje)  
-      #  try:
-            # Convertimos de DD/MM/YYYY a datetime.date
-       #     fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
-            # Retornamos como string AAAA-MM-DD para la BD
-        #    return fecha_obj.strftime("%Y-%m-%d")
-        #except ValueError:
-         #   print("Formato inválido. Debe ser DD/MM/YYYY.")
-
 
     
 #============================================================================================
@@ -276,17 +256,7 @@ def leerInfoConductor(con):
     placaVehiculo=validarPlaca(con,"Placa vehiculo: ")
     fecIngreso = pedirFechaVacia("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
     fecRetiro = pedirFechaVacia("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
-    #fecIngreso_str = input("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
-    #if fecIngreso_str.strip():
-    #    fecIngreso = pedirFecha("Fecha de ingreso (DD/MM/YYYY): ")
-    #else:
-     #   fecIngreso = None
-
-    #fecRetiro_str = input("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
-    #if fecRetiro_str.strip():
-     #   fecRetiro = pedirFecha("Fecha de retiro (DD/MM/YYYY): ")
-    #else:
-    #    fecRetiro = None
+    
     indContrato=validarContrato(fecIngreso,fecRetiro)
     turno=input("Turno: ")
     valorTurno=input("Valor del turno: ")
@@ -294,7 +264,7 @@ def leerInfoConductor(con):
     valorAdeuda=input("Valor a deuda: ")
     totalAhorrado=input("Total Ahorrado: ")
     conductor=(str(noConductor),str(nombre),str(apellido),str(direccion),str(telefono),str(correo),str(placaVehiculo),fecIngreso,fecRetiro,str(indContrato),str(turno),str(valorTurno),str(valorAhorro),str(valorAdeuda),str(totalAhorrado))
-    return conductor
+    return conductor #conversion de datos a str, para evitar errores
 
 def consultconductor(con):
     condr=validarConductor(con, "Ingrese el numero de identificacion del conductor: ")
