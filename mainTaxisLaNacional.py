@@ -201,7 +201,8 @@ def crearConductor(con,duct):
         con.commit()
         print("Conductor guardado con exito")
     except Excepcion as e:
-        print("Error al guardar el conductor", e) 
+        print("Error al guardar el conductor", e)
+        
 def validarConductor(con, mensaje):
     cursorObj = con.cursor()
     while True:
@@ -235,7 +236,34 @@ def validarContrato(fecIngreso,fecRetiro):
         else:
             print("Error:Las fechas no coinciden con el estado seleccionado, intente de nuevo")
             print("Contratado = Fecha de ingreso pero no de salida")
+            
+def leerInfoConductor(con):
+    noConductor=input("Identificacion Conductor: ")
+    nombre=input("Nombre: ")
+    apellido=input("Apellido: ")
+    direccion=input("Direccion: ")
+    telefono=input("Telefono: ")
+    correo=input("Correo: ")
+    placaVehiculo=validarPlaca(con,"Placa vehiculo: ")
+    fecIngreso_str = input("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
+    if fecIngreso_str.strip():
+        fecIngreso = pedirFecha("Fecha de ingreso (DD/MM/YYYY): ")
+    else:
+        fecIngreso = None
 
+    fecRetiro_str = input("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
+    if fecRetiro_str.strip():
+        fecRetiro = pedirFecha("Fecha de retiro (DD/MM/YYYY): ")
+    else:
+        fecRetiro = None
+    indContrato=validarContrato(fecIngreso,fecRetiro)
+    turno=input("Turno: ")
+    valorTurno=input("Valor del turno: ")
+    valorAhorro=input("Valor Ahorro: ")
+    valorAdeuda=input("Valor a deuda: ")
+    totalAhorrado=input("Total Ahorrado: ")
+    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,placaVehiculo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
+    return conductor
 
 def consultconductor(con):
     condr=validarConductor(con, "Ingrese el numero de identificacion del conductor: ")
@@ -255,7 +283,6 @@ def consultconductor(con):
     print("Valor de ahorro: ",condr[12])
     print("Valor a deuda: ",condr[13])
     print("Total ahorrado: ",condr[14])
-
 
 def actConduct(con):
     cursorObj = con.cursor()
@@ -305,34 +332,6 @@ def actConduct(con):
         ''', (n_direccion, n_telefono, n_correo, n_fh_ingreso, n_fh_retr, n_val_deuda, n_tl_ahrrdo, id ))    
     con.commit()
     print("Registro actualizado correctamente.")
-
-def leerInfoConductor():
-    noConductor=input("Identificacion Conductor: ")
-    nombre=input("Nombre: ")
-    apellido=input("Apellido: ")
-    direccion=input("Direccion: ")
-    telefono=input("Telefono: ")
-    correo=input("Correo: ")
-    placaVehiculo=input("Placa vehiculo: ")
-    fecIngreso_str = input("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
-    if fecIngreso_str.strip():
-        fecIngreso = pedirFecha("Fecha de ingreso (DD/MM/YYYY): ")
-    else:
-        fecIngreso = None
-
-    fecRetiro_str = input("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
-    if fecRetiro_str.strip():
-        fecRetiro = pedirFecha("Fecha de retiro (DD/MM/YYYY): ")
-    else:
-        fecRetiro = None
-    indContrato=validarContrato(fecIngreso,fecRetiro)
-    turno=input("Turno: ")
-    valorTurno=input("Valor del turno: ")
-    valorAhorro=input("Valor Ahorro: ")
-    valorAdeuda=input("Valor a deuda: ")
-    totalAhorrado=input("Total Ahorrado: ")
-    conductor=(noConductor,nombre,apellido,direccion,telefono,correo,placaVehiculo,fecIngreso,fecRetiro,indContrato,turno,valorTurno,valorAhorro,valorAdeuda,totalAhorrado)
-    return conductor
     
 #============================================================================================
 #----------------------------MANTENIMIENTO---------------------------------------------------
@@ -351,9 +350,9 @@ def crearTablaMantenimientos(con):
                                 PRIMARY KEY(numeroOrden))''')
     con.commit()
 
-def leerInfoMantenimiento():
+def leerInfoMantenimiento(con):
     noOrden=input("Numero de Orden: ")
-    plVehiculo=input("Placa: ")
+    plVehiculo=validarPlaca(con,"Placa: ")
     n=input("Nit Proveedor: ")
     nomProveedor=input("Nombre Proveedor: ")
     desServicio=input("Servicio Recibio: ")
@@ -538,7 +537,7 @@ def menu(con):
 
                                 Seleccione una opccion: >>>''')
                 if (opcConductores=='1'):
-                    miConductor=leerInfoConductor()
+                    miConductor=leerInfoConductor(con)
                     crearConductor(con,miConductor)
                 elif (opcConductores=='2'):
                     salirConductores=False
@@ -560,7 +559,7 @@ def menu(con):
 
                                  Seleccione una opcion: >>> ''')
                 if (opcMantenimientos=='1'):
-                    miMantenimiento=leerInfoMantenimiento()
+                    miMantenimiento=leerInfoMantenimiento(con)
                     crearMantenimiento(con,miMantenimiento)
                 elif (opcMantenimientos=='2'):
                     consultarMantenimientoRealizado1(con)
