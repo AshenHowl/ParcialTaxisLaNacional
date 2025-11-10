@@ -2,6 +2,12 @@ import sqlite3
 from sqlite3 import Error
 from datetime import datetime
 import os
+# --- IMPORTS PARA GENERAR PDF ---
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
 def conexionDB():
     try:
         con=sqlite3.connect('BDTaxisLaNacional.db')
@@ -467,6 +473,173 @@ def consultarMantenimientoRealizado3(con):
         maximafechaServicio=row[0]
         print("La maxima fecha de servicio es: ",maximafechaServicio)
     #print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
+    
+    def borrarMantenimiento(con):
+    cursorObj = con.cursor()
+    noOrden = input("Ingrese el número de orden que desea eliminar: ")
+
+    cursor.execute("SELECT * FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
+    registro = cursor.fetchone()
+
+    if registro is None:
+        print("No existe un mantenimiento con ese número de orden.")
+        return
+
+    confirmar = input(f"¿Está seguro de eliminar el mantenimiento {noOrden}? (s/n): ")
+
+    if confirmar.lower() == "s":
+        cursor.execute("DELETE FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
+        con.commit()
+        print("Mantenimiento eliminado correctamente.")
+    else:
+        print("Eliminación cancelada.")
+
+
+
+
+#============================================================================================
+#----------------------------PDF------------------------------------------------------------
+#============================================================================================
+def generarFichaVehiculoPDF(con):
+    cursor = con.cursor()
+
+    placa = input("Ingrese la placa del vehículo para generar la ficha en PDF: ")
+
+    #--------------------------------------------
+    # 1. CONSULTAR VEHÍCULO
+    #--------------------------------------------
+    cursor.execute("SELECT * FROM infoVehiculos WHERE placa=?", (placa,))
+    veh = cursor.fetchone()
+
+    if veh is None:
+        print("No existe un vehículo con esa placa.")
+        return
+
+    #--------------------------------------------
+    # 2. CONSULTAR CONDUCTOR ASIGNADO
+    #--------------------------------------------
+    cursor.execute("SELECT nombre, apellido, telefono, correo, fechaIngreso, fechaRetiro, indicadorContratado "
+                   "FROM infoConductor WHERE placaVehiculo=?", (placa,))
+    conductor = cursor.fetchone()
+
+    #--------------------------------------------
+    # 3. CONSULTAR ÚLTIMO MANTENIMIENTO
+    #--------------------------------------------
+    cursor.execute("""
+        SELECT descripcionServicio, valorFacturado, fechaServicio, nombreProveedor
+        FROM mantenimientoVehiculo
+        WHERE placaVehiculo=?
+        ORDER BY fechaServicio DESC
+        LIMIT 1
+    """, (placa,))
+    mantenimiento = cursor.fetchone()
+
+    #--------------------------------------------
+    # 4. CREAR PDF
+    #--------------------------------------------
+    filename = f"FichaVehiculo_{placa}.pdf"
+    doc = SimpleDocTemplate(filename, pagesize=letter)
+
+    styles = getSampleStyleSheet()
+    Story = []
+
+    # Título
+    Story.append(Paragraph(f"<b>FICHA DE VEHÍCULO - {placa}</b>", styles["Title"]))
+    Story.append(Spacer(1, 12))
+
+    #--------------------------------------------
+    # TABLA: Información del Vehículo
+    #--------------------------------------------
+    veh_tabla = [
+        ["Campo", "Valor"],
+        ["Placa", veh[0]],
+        ["Marca", veh[1]],
+        ["Referencia", veh[2]],
+        ["Modelo", veh[3]],
+        ["Número de Chasis", veh[4]],
+        ["Número de Motor", veh[5]],
+        ["Color", veh[6]],
+        ["Concesionario", veh[7]],
+        ["Fecha de Compra", veh[8]],
+        ["Garantía (meses)", veh[9]],
+        ["Fecha Compra Póliza", veh[10]],
+        ["Proveedor Póliza", veh[11]],
+        ["Fecha SOAT", veh[12]],
+        ["Proveedor SOAT", veh[13]],
+        ["Activo (1=Sí / 2=No)", veh[14]]
+    ]
+
+    tablaVeh = Table(veh_tabla, colWidths=[180, 300])
+    tablaVeh.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("ALIGN", (0,0), (-1,-1), "LEFT"),
+    ]))
+
+    Story.append(Paragraph("<b>Información del Vehículo</b>", styles["Heading2"]))
+    Story.append(tablaVeh)
+    Story.append(Spacer(1, 15))
+
+    #--------------------------------------------
+    # TABLA: Información del Conductor
+    #--------------------------------------------
+    Story.append(Paragraph("<b>Información del Conductor Asignado</b>", styles["Heading2"]))
+
+    if conductor:
+        cond_tabla = [
+            ["Campo", "Valor"],
+            ["Nombre", conductor[0] + " " + conductor[1]],
+            ["Teléfono", conductor[2]],
+            ["Correo", conductor[3]],
+            ["Fecha Ingreso", conductor[4]],
+            ["Fecha Retiro", conductor[5]],
+            ["Estado (1=Sí, 2=No, 3=Despedido)", conductor[6]]
+        ]
+    else:
+        cond_tabla = [["No hay conductor asignado.", ""]]
+
+    tablaCond = Table(cond_tabla, colWidths=[180, 300])
+    tablaCond.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+    ]))
+
+    Story.append(tablaCond)
+    Story.append(Spacer(1, 15))
+
+    #--------------------------------------------
+    # TABLA: Último Mantenimiento
+    #--------------------------------------------
+    Story.append(Paragraph("<b>Último Mantenimiento Registrado</b>", styles["Heading2"]))
+
+    if mantenimiento:
+        man_tabla = [
+            ["Campo", "Valor"],
+            ["Descripción", mantenimiento[0]],
+            ["Valor Facturado", mantenimiento[1]],
+            ["Fecha", mantenimiento[2]],
+            ["Proveedor", mantenimiento[3]]
+        ]
+    else:
+        man_tabla = [["No hay mantenimientos registrados.", ""]]
+
+    tablaMant = Table(man_tabla, colWidths=[180, 300])
+    tablaMant.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+    ]))
+
+    Story.append(tablaMant)
+    Story.append(Spacer(1, 20))
+
+    #--------------------------------------------
+    # GENERAR PDF
+    #--------------------------------------------
+    doc.build(Story)
+    print(f"PDF generado exitosamente: {filename}")
 
 #============================================================================================
 #----------------------------MENU------------------------------------------------------------
@@ -521,8 +694,9 @@ def menu(con):
                             modificarPoliza(con)
                         elif(opcActVehiculos=='3'):
                             salirActVehiculos=True
-                elif (opcVehiculos=='4'):
-                    salirVehiculos=True
+                elif (opcPrincipal=='4'):
+                    generarFichaVehiculoPDF(con)
+
             
         elif (opcPrincipal=='2'):
             salirConductores=False
