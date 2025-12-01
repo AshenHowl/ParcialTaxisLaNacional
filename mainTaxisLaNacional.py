@@ -1,5 +1,6 @@
 import sqlite3
 from sqlite3 import Error
+import re #Validacion correo
 from datetime import datetime # Fechas y horas
 import os #Verificar ruta de BD
 # --- IMPORTS PARA GENERAR PDF ---
@@ -7,6 +8,21 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.pagesizes import letter # Define el tamaño y tipo de pagina
 from reportlab.lib.styles import getSampleStyleSheet #Estilo de textos predefinidos
 from reportlab.lib import colors #Colores predefinidos
+
+# Verificar si reportlab está instalado
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch, cm
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    print("Advertencia: reportlab no está instalado. La generación de PDFs no estará disponible.")
+    print("Instálalo con: pip install reportlab")
 
 
 DB_FILENAME = "BDTaxisLaNacional.db"
@@ -235,6 +251,73 @@ class Conductor(BaseEntidad):
                                 totalAhorrado integer NOT NULL,
                                 PRIMARY KEY(identificacion))''')
         con.commit()
+        ##------------------------------------------------------#
+        #--------------ENCAPSULAMIENTO, PROPI. CON VALIDACION---#
+    @property
+    def correo(self):
+        """Getter para el correo"""
+        return getattr(self, "_correo", None)
+
+    @correo.setter
+    def correo(self, nuevo_correo):
+        """Setter con validación"""
+        if not nuevo_correo:
+            raise ValueError("El correo no puede estar vacío")
+        
+        # Validar el formato del correo
+        valido, mensaje = validar_correo(nuevo_correo)
+        if not valido:
+            raise ValueError(f"Correo inválido: {mensaje}")
+        
+        self._correo = nuevo_correo
+
+    @property
+    def telefono(self):
+        return getattr(self, "_telefono", None)
+
+    @telefono.setter
+    def telefono(self, nuevo_telefono):
+        """Setter con validación para teléfono"""
+        if not str(nuevo_telefono).isdigit():
+            raise ValueError("El teléfono debe contener solo números")
+        self._telefono = int(nuevo_telefono)
+
+    def mostrar_info(self):
+        print("------------ INFORMACIÓN CONDUCTOR -------------")
+        for c in self.campos:
+            val = getattr(self, f"_{c}", None)
+            print(f"{c}: {val}")
+        print("-----------------------------------------------")
+
+    @classmethod
+    def validar_conductor(cls, con, identificacion):
+        return cls.consultar_por_pk(con, identificacion)
+
+    @staticmethod
+    def validar_contrato(fecIngreso, fecRetiro):
+        """
+        POLIMORFISMO: Este método implementa una lógica específica de negocio
+        que varía según el estado del contrato.
+        """
+        while True:
+            indicador = input("Indicador contrato: Contratado[1], No contratado[2], Despedido[3]: ").strip()
+            if indicador not in ("1","2","3"):
+                print("Seleccione 1, 2 o 3")
+                continue
+            indicador = int(indicador)
+            if indicador == 1 and fecIngreso is not None and fecRetiro is None:
+                print("Estado: Contratado")
+                return indicador
+            elif indicador == 2 and fecIngreso is None and fecRetiro is None:
+                print("Estado: No contratado")
+                return indicador
+            elif indicador == 3 and fecIngreso is not None and fecRetiro is not None:
+                print("Estado: Despedido")
+                return indicador
+            else:
+                print("Las fechas no coinciden con el estado seleccionado. Intente de nuevo.")
+                # se repite el loop
+
 
     def mostrar_info(self):
         print("------------ INFORMACIÓN CONDUCTOR -------------")
@@ -273,6 +356,40 @@ class Conductor(BaseEntidad):
             else:
                 print("Las fechas no coinciden con el estado seleccionado. Intente de nuevo.")
                 # se repite el loop
+# ---------------------------
+# VALIDACIÓN DE CORREO ELECTRÓNICO
+# ---------------------------
+def validar_correo(correo):
+    """Valida el formato de un correo electrónico usando regex"""
+    if not correo or not correo.strip():
+        return False, "El correo no puede estar vacío"
+    
+    # Patrón para correo electrónico
+    patron = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    
+    if not re.match(patron, correo.strip()):
+        return False, "Formato de correo inválido. Ejemplo: usuario@dominio.com"
+    
+    return True, "Correo válido"
+
+def solicitar_correo_validado(mensaje="Correo: ", valor_actual=None):
+    
+    while True:
+        correo = input(mensaje).strip()
+        
+        # Si hay valor actual y el usuario deja vacío, mantener el actual
+        if valor_actual is not None and correo == "":
+            return valor_actual
+        
+        # Validar el correo
+        valido, mensaje_error = validar_correo(correo)
+        
+        if valido:
+            return correo
+        else:
+            print(f"Error: {mensaje_error}")
+            print("Por favor, ingrese un correo válido.")
+            print("Ejemplo: jorge.perez@gmail.com\n")
 
 # ---------------------------
 # CLASE Mantenimiento
@@ -365,8 +482,9 @@ def leer_info_conductor_input(con: sqlite3.Connection):
     telefono = input("Telefono: ").strip()
     while not telefono.isdigit():
         telefono = input("Debe ser numérico. Intente otra vez: ").strip()
-    correo = input("Correo: ").strip()
-    # validar placa existente
+    correo = solicitar_correo_validado("Correo: ")
+    # validar placa
+    #  existente
     placa = input("Placa vehiculo asignada: ").strip()
     if not Vehiculo.validar_placa(con, placa):
         print("Placa no registrada. Use una placa existente o registre el vehículo primero.")
@@ -541,7 +659,7 @@ def menu_conductores(con, db):
                 print(f"{campo}: {fila[idx]}")
             nueva_dir = input(f"Direccion [{fila[3]}]: ").strip() or fila[3]
             nuevo_tel = input(f"Telefono [{fila[4]}]: ").strip() or fila[4]
-            nuevo_correo = input(f"Correo [{fila[5]}]: ").strip() or fila[5]
+            nuevo_correo = solicitar_correo_validado (f"Correo [{fila[5]}]: ").strip() or fila[5]
             nueva_ing = input(f"Fecha ingreso [{fila[7]}]: ").strip() or fila[7]
             nueva_retr = input(f"Fecha retiro [{fila[8]}]: ").strip() or fila[8]
             nuevo_val_adeuda = input(f"Valor a deuda [{fila[13]}]: ").strip() or fila[13]
