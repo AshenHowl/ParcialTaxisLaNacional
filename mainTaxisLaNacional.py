@@ -8,43 +8,125 @@ from reportlab.lib.pagesizes import letter # Define el tamaño y tipo de pagina
 from reportlab.lib.styles import getSampleStyleSheet #Estilo de textos predefinidos
 from reportlab.lib import colors #Colores predefinidos
 
-def conexionDB():
-    try:
-        con=sqlite3.connect('BDTaxisLaNacional.db')
-        print("Base de datos", os.path.abspath("TaxisLaNacional.db"))
-        # creamos un objeto de conexión con que crea el repositorio
-        # físico de la base de datos (archivo físico)
-        return con
-    except Error:
-        print(Error)
 
-def cerrarBD(con):
-    con.close()
+DB_FILENAME = "BDTaxisLaNacional.db"
+# ---------------------------
+# Helper: manejo de fechas
+# ---------------------------
+def pedir_fecha(mensaje, allow_empty=False):
+    """
+    Pide fecha en formato DD/MM/YYYY.
+    Retorna string en formato YYYY-MM-DD para guardar en BD, o None si vacío y allow_empty True.
+    """
+    while True:
+        fecha_str = input(mensaje).strip()
+        if allow_empty and fecha_str == "":
+            return None
+        try:
+            fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+            return fecha_obj.strftime("%Y-%m-%d")
+        except ValueError:
+            print("Formato inválido. Use DD/MM/YYYY. Intente de nuevo.")
 
-def pedirFechaVacia(mensaje):
- while True:   
-    fecha_str = input(mensaje)
-    if not fecha_str.strip():
-        return None  # usuario no ingresó fecha
-    try:
-        fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
-        return fecha_obj.strftime("%Y-%m-%d")
-    except ValueError:
-        fecha_str = input("Formato inválido. Ingrese fecha (DD/MM/YYYY): ") #Para guardar en la BD
+def pedir_fecha_vacia(mensaje):
+    return pedir_fecha(mensaje, allow_empty=True)
 
-    
+# ---------------------------
+# Clase para conexión DB
+# ---------------------------
+class Database:
+    def __init__(self, filename=DB_FILENAME):
+        self._filename = filename
+        self._con = None
 
-    
-#============================================================================================
-#----------------------------VEHICULOS-------------------------------------------------------
-#============================================================================================
+    def conectar(self):
+        try:
+            self._con = sqlite3.connect(self._filename)
+            # enable foreign keys if needed in future
+            self._con.execute("PRAGMA foreign_keys = ON;")
+            return self._con
+        except Error as e:
+            print("Error al conectar DB:", e)
+            return None
 
-def crearTablaVehiculos(con):
-    cursorObj=con.cursor()
-    #1.  Es un objeto que recorre toda el repositorio de
-    #base de datos.  Utiliza para ello el objeto de conexión
-    #que ya habíamos creado.
-    cad='''CREATE TABLE IF NOT EXISTS infoVehiculos(
+    def cerrar(self):
+        if self._con:
+            self._con.close()
+            self._con = None
+
+    @property
+    def conexion(self):
+        if self._con is None:
+            return self.conectar()
+        return self._con
+
+# ---------------------------
+# CLASE PADRE: BaseEntidad
+# ---------------------------
+class BaseEntidad:
+    tabla = None          # debe ser sobrescrito
+    pk = None             # nombre del campo PK
+    campos = []           # lista de campos en orden para INSERT
+
+    def __init__(self, db: Database, **kwargs):
+        self._db = db
+        # carga atributos dinámicamente desde kwargs
+        for k, v in kwargs.items():
+            setattr(self, f"_{k}", v)
+
+    # --------- Operaciones DB genéricas ----------
+    @classmethod
+    def crear_tabla(cls, con):
+        """Sobrescribir en subclases o usar SQL general si es posible."""
+        raise NotImplementedError
+
+    def guardar(self):
+        """Inserta la entidad en la BD usando self.campos"""
+        con = self._db.conexion
+        cursor = con.cursor()
+        valores = []
+        for c in self.campos:
+            valores.append(getattr(self, f"_{c}", None))
+        placeholders = ",".join(["?"] * len(self.campos))
+        sql = f"INSERT INTO {self.tabla} ({','.join(self.campos)}) VALUES ({placeholders})"
+        cursor.execute(sql, valores)
+        con.commit()
+        return cursor.lastrowid
+
+    @classmethod
+    def consultar_por_pk(cls, con, valor_pk):
+        cursor = con.cursor()
+        sql = f"SELECT * FROM {cls.tabla} WHERE {cls.pk} = ?"
+        cursor.execute(sql, (valor_pk,))
+        return cursor.fetchone()
+
+    @classmethod
+    def listar_todos(cls, con):
+        cursor = con.cursor()
+        cursor.execute(f"SELECT * FROM {cls.tabla}")
+        return cursor.fetchall()
+
+    def mostrar_info(self):
+        """Método polimórfico - ser sobrescrito por subclases"""
+        print(f"<{self.__class__.__name__}> (entidad base)")
+
+# ---------------------------
+# CLASE Vehiculo
+# ---------------------------
+class Vehiculo(BaseEntidad):
+    tabla = "infoVehiculos"
+    pk = "placa"
+    campos = [
+        "placa","marca","referencia","modelo","numeroChasis","numeroMotor",
+        "color","concesionario","fechaCompraVehiculo","tiempoGarantia",
+        "fechaCompraPoliza","proveedorPoliza","fechaCompraSegObliga",
+        "proveedorSegObliga","activo"
+    ]
+
+    @classmethod
+    def crear_tabla(cls, con):
+        cur = con.cursor()
+        cur.execute('''CREATE TABLE IF NOT EXISTS infoVehiculos(
                                 placa text NOT NULL,
                                 marca text NOT NULL, 
                                 referencia text NOT NULL,
@@ -60,128 +142,82 @@ def crearTablaVehiculos(con):
                                 fechaCompraSegObliga date NOT NULL,
                                 proveedorSegObliga text NOT NULL,
                                 activo integer NOT NULL,
-                                PRIMARY KEY(placa))'''
-    #2.  Creamos la cadena con el SQL a ejecutar
-    cursorObj.execute(cad)
-    #3.  Ejecutamos la cadena
-    con.commit()
-    #4. Asegurar la persistencia:  llamamos al método commit()
-    #del objeto conexión
+                                PRIMARY KEY(placa))''')
+        con.commit()
 
-def crearVehiculo(con,duct):    
-    cursorObj=con.cursor()
-    cursorObj.execute('''INSERT INTO infoVehiculos
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
-    con.commit()
+    # Encapsulamiento con property (ejemplo solicitado)
+    @property
+    def color(self):
+        return getattr(self, "_color", None)
 
-def validarEstado(mensaje):
-    while True:
-        indicadorActivo = input(mensaje)
-        if indicadorActivo in ["1","2"]:
-            return indicadorActivo
-        else:
-            print("Estado invalido. Por favor seleccione Activo[1] Inactivo[2] ")
+    @color.setter
+    def color(self, nuevo_color):
+        self._color = nuevo_color
 
-def leerInfoVehiculo():
-    placa=input("Placa vehiculo: ")
-    marca=input("Marca: ")
-    referencia=input("Referencia: ")
-    modelo=input("Modelo: ")
-    numeroChasis=input("Numero Chasis: ")
-    numeroMotor=input("Numero de motor: ")
-    color=input("Color: ")
-    concesionario=input("Concesionario: ")
-    fechaCompra= pedirFecha ("Fecha de compra: ")
-    tiempoGarantia=input("Tiempo garantia: ")
-    fechaCompraPoliza= pedirFecha("Fecha compra poliza ")
-    proveedorPoliza=input("Proveedor poliza: ")
-    fechaCompraSeguroOblig= pedirFecha("Fecha de compra seguro: ")
-    proveedorSeguroOblig=input("Proveedor de seguro: ")
-    indicadorActivo=validarEstado("Estado: Activo[1] Inactivo[2])")
-    vehiculo=(placa,marca,referencia,modelo,numeroChasis,numeroMotor,color,concesionario,fechaCompra,tiempoGarantia,fechaCompraPoliza,proveedorPoliza,fechaCompraSeguroOblig,proveedorSeguroOblig,indicadorActivo)
-    return vehiculo
+    @property
+    def activo(self):
+        return getattr(self, "_activo", None)
 
-def validarPlaca(con, mensaje):
-    cursorObj = con.cursor()
-    while True:
-        placa=input(mensaje)
-        cursorObj.execute("SELECT * FROM infoVehiculos WHERE placa=?", (placa,))
-        placaVehiculo = cursorObj.fetchone()
+    @activo.setter
+    def activo(self, nuevo):
+        if str(nuevo) not in ("1","2"):
+            raise ValueError("Activo debe ser '1' o '2'")
+        self._activo = int(nuevo)
 
-        if placaVehiculo is None:
-            print("La placa ingresada no se encuentra registrada. Por favor ingrese una placa valida")
-        else:
-            print("Placa registrada")
-            return placaVehiculo
+    def mostrar_info(self):
+        print("--------------- FICHA VEHÍCULO ---------------")
+        for c in self.campos:
+            val = getattr(self, f"_{c}", None)
+            print(f"{c}: {val}")
+        print("---------------------------------------------")
 
-def consultarVehiculo(con):
-    veh = validarPlaca(con,"Ingrese el numero de placa a validar: ")
-    print("----------------------------------------------------")
-    print("Informacion asociada al vehiculo con numero de placa",veh[0])
-    print("----------------------------------------------------")
-    print("Marca:", veh[1])
-    print("Referencia:", veh[2])
-    print("Modelo:", veh[3])
-    print("Numero de chasis:", veh[4])
-    print("Numero de motor:", veh[5])
-    print("Color:", veh[6])
-    print("Concesionario:", veh[7])
-    print("Fecha de compra:", veh[8])
-    print("Garantia: ", veh[9],"meses")
-    print("Fecha de compra poliza:", veh[10])
-    print("Proveedor de poliza:", veh[11])
-    print("Fecha de compra seguro:", veh[12])
-    print("Proveedor de seguro:", veh[13])
-    print("Estado del vehiculo:", veh[14])
-    print("---------------------------")
+    # métodos de utilidad
+    @classmethod
+    def validar_placa(cls, con, placa):
+        """Retorna fila si existe, sino None"""
+        return cls.consultar_por_pk(con, placa)
 
-def modificarPoliza(con):
-    cursorObj = con.cursor()
-    veh = validarPlaca(con, "Indique la placa del vehículo a modificar: ")
-    placa = veh[0]
-    fechaAnteriorPoliza = datetime.strptime(veh[10], "%Y-%m-%d").date()
+    @classmethod
+    def actualizar_poliza(cls, con, placa, nueva_fecha_poliza):
+        cursor = con.cursor()
+        # validar formato: asumimos que se recibe YYYY-MM-DD
+        try:
+            nueva = datetime.strptime(nueva_fecha_poliza, "%Y-%m-%d").date()
+        except Exception:
+            raise ValueError("Formato de fecha inválido (esperado YYYY-MM-DD)")
+        fila = cls.consultar_por_pk(con, placa)
+        if not fila:
+            raise LookupError("Placa no encontrada")
+        fecha_anterior = datetime.strptime(fila[10], "%Y-%m-%d").date()
+        if nueva <= fecha_anterior:
+            raise ValueError("La nueva fecha debe ser mayor que la anterior")
+        cursor.execute("UPDATE infoVehiculos SET fechaCompraPoliza = ? WHERE placa = ?", (nueva_fecha_poliza, placa))
+        con.commit()
 
-    while True:
-        nuevaFecComPoliza = pedirFecha("Ingrese nueva fecha de compra de la póliza (DD/MM/YYYY): ")
-        nuevaFecComPolizaDate = datetime.strptime(nuevaFecComPoliza, "%Y-%m-%d").date()
-        
-        if nuevaFecComPolizaDate > fechaAnteriorPoliza:
-            cursorObj.execute('''
-                UPDATE infoVehiculos
-                SET fechaCompraPoliza = ?
-                WHERE placa = ?
-            ''', (nuevaFecComPoliza, placa))
-            con.commit()
-            print("Póliza actualizada correctamente.")
-            break
-        else:
-            print("La nueva fecha debe ser mayor que la fecha actual.")
-            break
-            
+    @classmethod
+    def actualizar_indicador(cls, con, placa, nuevo_estado):
+        if str(nuevo_estado) not in ("1","2"):
+            raise ValueError("Estado inválido")
+        cursor = con.cursor()
+        cursor.execute("UPDATE infoVehiculos SET activo = ? WHERE placa = ?", (int(nuevo_estado), placa))
+        con.commit()
 
-        
-def modificarIndicador(con):
-    cursorObj = con.cursor()
-    veh = validarPlaca(con, "Indique el número de placa del vehículo a modificar: ")
-    placa = veh[0]
-    nuevoEstado = validarEstado("Nuevo estado: Activo[1] Inactivo[2]: ")
+# ---------------------------
+# CLASE Conductor
+# ---------------------------
+class Conductor(BaseEntidad):
+    tabla = "infoConductor"
+    pk = "identificacion"
+    campos = [
+        "identificacion","nombre","apellido","direccion","telefono","correo",
+        "placaVehiculo","fechaIngreso","fechaRetiro","indicadorContratado",
+        "turno","valorTurno","valorAhorro","valorAdeuda","totalAhorrado"
+    ]
 
-    cursorObj.execute('''
-        UPDATE infoVehiculos
-        SET activo = ?
-        WHERE placa = ?
-    ''', (nuevoEstado, placa))
-
-    con.commit()
-    print("Estado actualizado correctamente.")
-
-#============================================================================================
-#----------------------------CONDUCTORES-----------------------------------------------------
-#============================================================================================
-
-def crearTablaConductores(con):    
-    cursorObj=con.cursor()
-    cursorObj.execute('''CREATE TABLE IF NOT EXISTS infoConductor(
+    @classmethod
+    def crear_tabla(cls, con):
+        cur = con.cursor()
+        cur.execute('''CREATE TABLE IF NOT EXISTS infoConductor(
                                 identificacion integer NOT NULL,
                                 nombre text NOT NULL, 
                                 apellido text NOT NULL,
@@ -198,149 +234,58 @@ def crearTablaConductores(con):
                                 valorAdeuda integer NOT NULL,
                                 totalAhorrado integer NOT NULL,
                                 PRIMARY KEY(identificacion))''')
-    con.commit()
-
-def crearConductor(con,duct):
-    try:   
-        cursorObj=con.cursor()
-        cursorObj.execute('''INSERT INTO infoConductor
-                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',duct)
         con.commit()
-        print("Conductor guardado con exito")
-    except Exception as e:
-        print("Error al guardar el conductor", e)
-        
-def validarConductor(con, mensaje):
-    cursorObj = con.cursor()
-    while True:
-        identificacion=input(mensaje)
-        cursorObj.execute("SELECT * FROM infoConductor WHERE identificacion=?", (identificacion,))
-        idConductor = cursorObj.fetchone()
 
-        if idConductor is None:
-            print("La identificacion no se encuentra registrada. Porfavor indique una identificacion valida")
-        else:
-            print("Identificacion registrada")
-            return idConductor
+    def mostrar_info(self):
+        print("------------ INFORMACIÓN CONDUCTOR -------------")
+        for c in self.campos:
+            val = getattr(self, f"_{c}", None)
+            print(f"{c}: {val}")
+        print("-----------------------------------------------")
 
-def validarContrato(fecIngreso,fecRetiro):
-    while True:
-        indicador = input("Indicador contrato: Contratado[1], No contratado[2], Despedido[3]: ")
-        if indicador not in ["1","2","3"]:
-            print("Por favor elija un estado valido: Contratado[1] No contratado[2] Despedido[3]")
-            continue
-        indicador=int(indicador)
+    @classmethod
+    def validar_conductor(cls, con, identificacion):
+        return cls.consultar_por_pk(con, identificacion)
 
-        if indicador == 1 and fecIngreso is not None and fecRetiro is None:
-            print("Estado: Contratado")
-            return indicador
-        elif indicador == 2 and fecIngreso is None and fecRetiro is None:
-            print("Estado: No contratado")
-            return indicador
-        elif indicador == 3 and fecIngreso is not None and fecRetiro is not None:
-            print("Estado: Despedido")
-            return indicador
-        else:
-            print("Error:Las fechas no coinciden con el estado seleccionado, intente de nuevo")
-            print("Contratado = Fecha de ingreso pero no de salida")
-            
-def leerInfoConductor(con):
-    noConductor=input("Identificacion Conductor: ")
-    nombre=input("Nombre: ")
-    apellido=input("Apellido: ")
-    direccion=input("Direccion: ")
-    telefono=input("Telefono: ")
-    while not telefono.isdigit():
-         telefono = input("Debe ser numérico. Intente otra vez: ")
-    correo=input("Correo: ")
-    placaVehiculo=validarPlaca(con,"Placa vehiculo: ")
-    fecIngreso = pedirFechaVacia("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
-    fecRetiro = pedirFechaVacia("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
-    
-    indContrato=validarContrato(fecIngreso,fecRetiro)
-    turno=input("Turno: ")
-    valorTurno=input("Valor del turno: ")
-    valorAhorro=input("Valor Ahorro: ")
-    valorAdeuda=input("Valor a deuda: ")
-    totalAhorrado=input("Total Ahorrado: ")
-    conductor=(str(noConductor),str(nombre),str(apellido),str(direccion),str(telefono),str(correo),str(placaVehiculo),fecIngreso,fecRetiro,str(indContrato),str(turno),str(valorTurno),str(valorAhorro),str(valorAdeuda),str(totalAhorrado))
-    return conductor #conversion de datos a str, para evitar errores
+    @staticmethod
+    def validar_contrato(fecIngreso, fecRetiro):
+        """
+        Lógica para validar indicador de contrato:
+        Contratado[1] -> fecIngreso != None y fecRetiro == None
+        No contratado[2] -> fecIngreso == None y fecRetiro == None
+        Despedido[3] -> fecIngreso != None y fecRetiro != None
+        """
+        while True:
+            indicador = input("Indicador contrato: Contratado[1], No contratado[2], Despedido[3]: ").strip()
+            if indicador not in ("1","2","3"):
+                print("Seleccione 1, 2 o 3")
+                continue
+            indicador = int(indicador)
+            if indicador == 1 and fecIngreso is not None and fecRetiro is None:
+                print("Estado: Contratado")
+                return indicador
+            elif indicador == 2 and fecIngreso is None and fecRetiro is None:
+                print("Estado: No contratado")
+                return indicador
+            elif indicador == 3 and fecIngreso is not None and fecRetiro is not None:
+                print("Estado: Despedido")
+                return indicador
+            else:
+                print("Las fechas no coinciden con el estado seleccionado. Intente de nuevo.")
+                # se repite el loop
 
-def consultconductor(con):
-    condr=validarConductor(con, "Ingrese el numero de identificacion del conductor: ")
-    print("------------------------------------")
-    print("La informacion asociada con el numero de identificacion es:",condr[0])
-    print("Nombre: ",condr[1])
-    print("Apellido: ",condr[2])
-    print("Direccion: ",condr[3])
-    print("Telefono: ",condr[4])
-    print("Correo: ",condr[5])
-    print("Placa de vehiculo: ",condr[6])
-    print("Fecha de ingreso (si aplica): ",condr[7])
-    print("Fecha de retiro (si aplica): ",condr[8])
-    print("Indicador de contrato (1:Si, 2:No, 3:Despedido)",condr[9])
-    print("Turno: ",condr[10])
-    print("Valor de el turno: ",condr[11])
-    print("Valor de ahorro: ",condr[12])
-    print("Valor a deuda: ",condr[13])
-    print("Total ahorrado: ",condr[14])
+# ---------------------------
+# CLASE Mantenimiento
+# ---------------------------
+class Mantenimiento(BaseEntidad):
+    tabla = "mantenimientoVehiculo"
+    pk = "numeroOrden"
+    campos = ["numeroOrden","placaVehiculo","nit","nombreProveedor","descripcionServicio","valorFacturado","fechaServicio"]
 
-def actConduct(con):
-    cursorObj = con.cursor()
-    condr = validarConductor(con, "Ingrese el numero de identificacion del conductor: ")
-     #Asumimos que el campo 0 es el id
-    if condr is None:
-        print("Conductor no registrado.")
-        return
-    id = condr[0]
-    print("La informacion asociada con el numero de identificacion es:",condr[0])
-    print("Nombre: ",condr[1])
-    print("Apellido: ",condr[2])
-    print("Direccion: ",condr[3])
-    print("Telefono: ",condr[4])
-    print("Correo: ",condr[5])
-    print("Placa de vehiculo: ",condr[6])
-    print("Fecha de ingreso (si aplica): ",condr[7])
-    print("Fecha de retiro (si aplica): ",condr[8])
-    print("Indicador de contrato (1:Si, 2:No, 3:Despedido)",condr[9])
-    print("Turno: ",condr[10])
-    print("Valor de el turno: ",condr[11])
-    print("Valor de ahorro: ",condr[12])
-    print("Valor a deuda: ",condr[13])
-    print("Total ahorrado: ",condr[14])
-    print("\n--- Actualización de campos ---")
-    print("Presione Enter si no desea cambiar un campo.\n")
-        # Pide nuevos valores o deja los actuales si no se escribe nada
-    #n_nombre=input(f"Nombre: [{condr[1]}]: ") or condr[1]
-    #n_apellido=input(f"Apellido: [{condr[2]}]: ") or condr[2]
-    n_direccion=input(f"Direccion: [{condr[3]}]: ") or condr[3]
-    n_telefono=input(f"Telefono: [{condr[4]}]: ") or condr[4]
-    n_correo=input(f"Correo: [{condr[5]}]: ") or condr[5]
-    #n_pl_veh=input(f"Placa de vehiculo: [{condr[6]}]: ") or condr[6]
-    n_fh_ingreso=input(f"Fecha de ingreso: [{condr[7]}]: ") or condr[7]
-    n_fh_retr=input(f"Fecha de retiro: [{condr[8]}]: ") or condr[8]
-    #n_ind_contrat=input(f"Indicador de contrato: [{condr[9]}]: ") or condr[9]
-    #n_turn=input(f"Turno: [{condr[10]}]: ") or condr[10]
-    #n_val_turn=input(f"Valor de el turno: [{condr[11]}]: ") or condr[11]
-    #n_val_ahrro=input(f"Valor de ahorro: [{condr[12]}]: ") or condr[12]
-    n_val_deuda=input(f"Valor a deuda: [{condr[13]}]: ") or condr[13]
-    n_tl_ahrrdo=input(f"Total ahorrado: [{condr[14]}]: ") or condr[14]
-         # Ejecutar actualización
-    cursorObj.execute('''
-        UPDATE infoConductor
-        SET direccion = ?, telefono = ?, correo = ?, fechaIngreso = ?, fechaRetiro = ?, valorAdeuda = ?, totalAhorrado = ?
-        WHERE identificacion = ?
-        ''', (n_direccion, n_telefono, n_correo, n_fh_ingreso, n_fh_retr, n_val_deuda, n_tl_ahrrdo, id ))    
-    con.commit()
-    print("Registro actualizado correctamente.")
-    
-#============================================================================================
-#----------------------------MANTENIMIENTO---------------------------------------------------
-#============================================================================================
-
-def crearTablaMantenimientos(con):     
-    cursorObj=con.cursor()
-    cursorObj.execute('''CREATE TABLE IF NOT EXISTS mantenimientoVehiculo(
+    @classmethod
+    def crear_tabla(cls, con):
+        cur = con.cursor()
+        cur.execute('''CREATE TABLE IF NOT EXISTS mantenimientoVehiculo(
                                 numeroOrden integer NOT NULL,
                                 placaVehiculo text NOT NULL, 
                                 nit text NOT NULL,
@@ -349,422 +294,389 @@ def crearTablaMantenimientos(con):
                                 valorFacturado integer NOT NULL,
                                 fechaServicio date NOT NULL,
                                 PRIMARY KEY(numeroOrden))''')
-    con.commit()
-
-def leerInfoMantenimiento(con):
-    noOrden=input("Numero de Orden: ")
-    plVehiculo=validarPlaca(con,"Placa: ")
-    n=input("Nit Proveedor: ")
-    nomProveedor=input("Nombre Proveedor: ")
-    desServicio=input("Servicio Recibio: ")
-    ValFacturado=input("Valor Facturado: ")
-    fecServicio=pedirFecha("Fecha manteminiento: ")
-    mantenimiento=(noOrden,plVehiculo,n,nomProveedor,desServicio,ValFacturado,fecServicio)
-    print("La tupla mantenimiento es; ",mantenimiento)
-    return mantenimiento
-
-def crearMantenimiento(con,mant):    
-    cursorObj=con.cursor()
-    cursorObj.execute('''INSERT INTO mantenimientoVehiculo
-                         VALUES(?,?,?,?,?,?,?)''',mant)
-    con.commit()
-
-def actualizarMantenimientoRealizado(con):
-    cursorObj = con.cursor()
-    noOrden = input("Ingrese el número de orden que desea actualizar: ")
-
-    cursorObj.execute("SELECT * FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
-    registro = cursorObj.fetchone()
-
-    if registro is None:
-        print("No existe un mantenimiento con el número de orden ingresado.")
-        return
-
-    print("Registro encontrado:")
-    print("Número de orden:", registro[0])
-    print("Placa vehículo:", registro[1])
-    print("Nit:", registro[2])
-    print("Nombre proveedor:", registro[3])
-    print("Descripción servicio:", registro[4])
-    print("Valor facturado:", registro[5])
-    print("Fecha servicio:", registro[6])
-
-    print("\n--- Actualización de campos ---")
-    print("Presione Enter si no desea cambiar un campo.\n")
-
-    # Pide nuevos valores o deja los actuales si no se escribe nada
-    nuevaDescripcion = input(f"Descripción del servicio [{registro[4]}]: ") or registro[4]
-    nuevoValor = input(f"Valor facturado [{registro[5]}]: ") or registro[5]
-    nuevaFecha = input(f"Fecha del servicio (dd/mm/aaaa) [{registro[6]}]: ") or registro[6]
-
-    # Ejecutar actualización
-    cursorObj.execute('''
-        UPDATE mantenimientoVehiculo
-        SET descripcionServicio = ?, valorFacturado = ?, fechaServicio = ?
-        WHERE numeroOrden = ?
-    ''', (nuevaDescripcion, nuevoValor, nuevaFecha, noOrden))
-
-    con.commit()
-    print("Registro actualizado correctamente.")
-
-def consultarMantenimientoRealizado(con):
-    cursorObj=con.cursor()
-    cad='SELECT numeroOrden,placaVehiculo,nombreProveedor,descripcionServicio,valorFacturado,fechaServicio FROM mantenimientoVehiculo WHERE numeroOrden='+noOrden
-    cursorObj.execute(cad)
-    filas=cursorObj.fetchall()
-    print("El tipo de dato de filas es: ",type(filas))
-    for row in filas:
-        no=row[0]
-        placa=row[1]
-        ValorFacturado=row[5]
-        descripcion=row[4]
-        nombreP=row[3]
-        fechaS=row[6]
-        ni=[2]
-        print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
-    #print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
-
-def consultarMantenimientoRealizado1(con):
-    
-    noOrden = input("Ingrese el número de orden a consultar: ")
-    cursorObj = con.cursor()
-    cursorObj.execute("SELECT * FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
-    filas = cursorObj.fetchall()
-
-    if not filas:
-        print("No se encontró ningún mantenimiento con ese número de orden.")
-        return
-
-    print("Resultados encontrados:")
-    for row in filas:
-        print("Orden:", row[0])
-        print("Placa:", row[1])
-        print("NIT Proveedor:", row[2])
-        print("Nombre Proveedor:", row[3])
-        print("Descripción Servicio:", row[4])
-        print("Valor Facturado:", row[5])
-        print("Fecha Servicio:", row[6])
-        print("---------------------------")
-
-
-def consultarMantenimientoRealizado2(con):
-    cursorObj=con.cursor()
-    cad='SELECT * FROM mantenimientoVehiculo'
-    cursorObj.execute(cad)
-    filas=cursorObj.fetchall()
-    print("El tipo de dato de filas es: ",type(filas))
-    for row in filas:
-        sumatoriaValorFacturado=row[0]
-        print("El valor facturado total es: ",sumatoriaValorFacturado)
-    #print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
-
-def consultarMantenimientoRealizado3(con):
-    cursorObj=con.cursor()
-    cad='SELECT max(FechaServicio) FROM mantenimientoVehiculo WHERE placaVehiculo="'+placa+'"'
-    cursorObj.execute(cad)
-    filas=cursorObj.fetchall()
-    print("El tipo de dato de filas es: ",type(filas))
-    for row in filas:
-        maximafechaServicio=row[0]
-        print("La maxima fecha de servicio es: ",maximafechaServicio)
-    #print("Orden: ",no,"Placa: ",placa,"Fecha: ",fechaS)
-    
-    def borrarMantenimiento(con):
-        cursorObj = con.cursor()
-    noOrden = input("Ingrese el número de orden que desea eliminar: ")
-
-    cursor.execute("SELECT * FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
-    registro = cursor.fetchone()
-
-    if registro is None:
-        print("No existe un mantenimiento con ese número de orden.")
-        return
-
-    confirmar = input(f"¿Está seguro de eliminar el mantenimiento {noOrden}? (s/n): ")
-
-    if confirmar.lower() == "s":
-        cursor.execute("DELETE FROM mantenimientoVehiculo WHERE numeroOrden=?", (noOrden,))
         con.commit()
-        print("Mantenimiento eliminado correctamente.")
-    else:
-        print("Eliminación cancelada.")
 
+    def mostrar_info(self):
+        print("---------- MANTENIMIENTO ----------")
+        for c in self.campos:
+            val = getattr(self, f"_{c}", None)
+            print(f"{c}: {val}")
+        print("----------------------------------")
 
+    @classmethod
+    def consultar_por_numero(cls, con, numeroOrden):
+        return cls.consultar_por_pk(con, numeroOrden)
 
+    @classmethod
+    def borrar_por_numero(cls, con, numeroOrden):
+        cur = con.cursor()
+        cur.execute("DELETE FROM mantenimientoVehiculo WHERE numeroOrden = ?", (numeroOrden,))
+        con.commit()
 
-#============================================================================================
-#----------------------------PDF------------------------------------------------------------
-#============================================================================================
-def generarFichaVehiculoPDF(con):
-    cursor = con.cursor()
+    @classmethod
+    def max_fecha_por_placa(cls, con, placa):
+        cur = con.cursor()
+        cur.execute("SELECT MAX(fechaServicio) FROM mantenimientoVehiculo WHERE placaVehiculo=?", (placa,))
+        return cur.fetchone()[0]
 
-    placa = input("Ingrese la placa del vehículo para generar la ficha en PDF: ")
+    @classmethod
+    def suma_valores(cls, con):
+        cur = con.cursor()
+        cur.execute("SELECT SUM(valorFacturado) FROM mantenimientoVehiculo")
+        return cur.fetchone()[0]
 
-    #--------------------------------------------
-    # 1. CONSULTAR VEHÍCULO
-    #--------------------------------------------
-    cursor.execute("SELECT * FROM infoVehiculos WHERE placa=?", (placa,))
-    veh = cursor.fetchone()
+# ---------------------------
+# FUNCIONES DE LECTURA (crear objetos desde input)
+# ---------------------------
+def leer_info_vehiculo_input():
+    placa = input("Placa vehiculo: ").strip()
+    marca = input("Marca: ").strip()
+    referencia = input("Referencia: ").strip()
+    modelo = int(input("Modelo: ").strip())
+    numeroChasis = input("Numero Chasis: ").strip()
+    numeroMotor = input("Numero de motor: ").strip()
+    color = input("Color: ").strip()
+    concesionario = input("Concesionario: ").strip()
+    fechaCompra = pedir_fecha("Fecha de compra (DD/MM/YYYY): ")
+    tiempoGarantia = int(input("Tiempo garantia (meses): ").strip())
+    fechaCompraPoliza = pedir_fecha("Fecha compra poliza (DD/MM/YYYY): ")
+    proveedorPoliza = input("Proveedor poliza: ").strip()
+    fechaCompraSeguroOblig = pedir_fecha("Fecha de compra seguro obligatorio (DD/MM/YYYY): ")
+    proveedorSeguroOblig = input("Proveedor de seguro: ").strip()
+    activo = input("Estado: Activo[1] Inactivo[2]: ").strip()
+    if activo not in ("1","2"):
+        print("Estado inválido, se asigna 1 (Activo).")
+        activo = "1"
+    datos = {
+        "placa": placa, "marca": marca, "referencia": referencia, "modelo": modelo,
+        "numeroChasis": numeroChasis, "numeroMotor": numeroMotor, "color": color,
+        "concesionario": concesionario, "fechaCompraVehiculo": fechaCompra,
+        "tiempoGarantia": tiempoGarantia, "fechaCompraPoliza": fechaCompraPoliza,
+        "proveedorPoliza": proveedorPoliza, "fechaCompraSegObliga": fechaCompraSeguroOblig,
+        "proveedorSegObliga": proveedorSeguroOblig, "activo": int(activo)
+    }
+    return datos
 
-    if veh is None:
-        print("No existe un vehículo con esa placa.")
+def leer_info_conductor_input(con: sqlite3.Connection):
+    identificacion = input("Identificacion Conductor: ").strip()
+    nombre = input("Nombre: ").strip()
+    apellido = input("Apellido: ").strip()
+    direccion = input("Direccion: ").strip()
+    telefono = input("Telefono: ").strip()
+    while not telefono.isdigit():
+        telefono = input("Debe ser numérico. Intente otra vez: ").strip()
+    correo = input("Correo: ").strip()
+    # validar placa existente
+    placa = input("Placa vehiculo asignada: ").strip()
+    if not Vehiculo.validar_placa(con, placa):
+        print("Placa no registrada. Use una placa existente o registre el vehículo primero.")
+    fechaIngreso = pedir_fecha_vacia("Fecha de ingreso (DD/MM/YYYY), deje vacío si no aplica: ")
+    fechaRetiro = pedir_fecha_vacia("Fecha de retiro (DD/MM/YYYY), deje vacío si no aplica: ")
+    # validar contrato
+    indicador = Conductor.validar_contrato(fechaIngreso, fechaRetiro)
+    turno = int(input("Turno (1=24h,2=12h): ").strip())
+    valorTurno = float(input("Valor del turno: ").strip())
+    valorAhorro = float(input("Valor Ahorro: ").strip())
+    valorAdeuda = float(input("Valor a deuda: ").strip())
+    totalAhorrado = float(input("Total Ahorrado: ").strip())
+
+    datos = {
+        "identificacion": identificacion, "nombre": nombre, "apellido": apellido,
+        "direccion": direccion, "telefono": int(telefono), "correo": correo,
+        "placaVehiculo": placa, "fechaIngreso": fechaIngreso, "fechaRetiro": fechaRetiro,
+        "indicadorContratado": indicador, "turno": turno, "valorTurno": valorTurno,
+        "valorAhorro": valorAhorro, "valorAdeuda": valorAdeuda, "totalAhorrado": totalAhorrado
+    }
+    return datos
+
+def leer_info_mantenimiento_input(con: sqlite3.Connection):
+    numeroOrden = int(input("Numero de Orden: ").strip())
+    placaVehiculo = input("Placa: ").strip()
+    if not Vehiculo.validar_placa(con, placaVehiculo):
+        print("Placa no registrada. Registrar vehículo primero o use una placa válida.")
+    nit = input("Nit Proveedor: ").strip()
+    nombreProveedor = input("Nombre Proveedor: ").strip()
+    descripcionServicio = input("Servicio Recibido: ").strip()
+    valorFacturado = float(input("Valor Facturado: ").strip())
+    fechaServicio = pedir_fecha("Fecha mantenimiento (DD/MM/YYYY): ")
+    datos = {
+        "numeroOrden": numeroOrden, "placaVehiculo": placaVehiculo, "nit": nit,
+        "nombreProveedor": nombreProveedor, "descripcionServicio": descripcionServicio,
+        "valorFacturado": valorFacturado, "fechaServicio": fechaServicio
+    }
+    return datos
+
+# ---------------------------
+# OPERACIONES DE ALTO NIVEL / MENÚ
+# ---------------------------
+def crear_tablas_todas(con):
+    Vehiculo.crear_tabla(con)
+    Conductor.crear_tabla(con)
+    Mantenimiento.crear_tabla(con)
+    print("Tablas creadas (si no existían).")
+
+def menu_principal(db: Database):
+    con = db.conexion
+    while True:
+        print("\n--- MENU PRINCIPAL ---")
+        print("1. Vehículos")
+        print("2. Conductores")
+        print("3. Mantenimientos")
+        print("4. Ficha vehículo (PDF)")
+        print("5. Crear tablas (si no existen)")
+        print("0. Salir")
+        opc = input("Opción: ").strip()
+        if opc == "1":
+            menu_vehiculos(con, db)
+        elif opc == "2":
+            menu_conductores(con, db)
+        elif opc == "3":
+            menu_mantenimientos(con, db)
+        elif opc == "4":
+            generar_ficha_vehiculo_pdf(con)
+        elif opc == "5":
+            crear_tablas_todas(con)
+        elif opc == "0":
+            print("Saliendo...")
+            break
+        else:
+            print("Opción inválida.")
+
+# ---------- Menú Vehículos ----------
+def menu_vehiculos(con, db):
+    while True:
+        print("\n--- VEHÍCULOS ---")
+        print("1. Registrar vehículo")
+        print("2. Consultar vehículo por placa")
+        print("3. Actualizar póliza (fecha mayor a anterior)")
+        print("4. Cambiar indicador activo")
+        print("0. Volver")
+        opc = input("Opción: ").strip()
+        if opc == "1":
+            datos = leer_info_vehiculo_input()
+            v = Vehiculo(db, **datos)
+            try:
+                v.guardar()
+                print("Vehículo guardado correctamente.")
+            except Exception as e:
+                print("Error guardando vehículo:", e)
+        elif opc == "2":
+            placa = input("Ingrese placa: ").strip()
+            fila = Vehiculo.consultar_por_pk(con, placa)
+            if not fila:
+                print("Placa no encontrada.")
+            else:
+                # construir objeto temporal para mostrar
+                campos = dict(zip(Vehiculo.campos, fila))
+                v = Vehiculo(db, **campos)
+                v.mostrar_info()
+        elif opc == "3":
+            placa = input("Ingrese placa: ").strip()
+            if not Vehiculo.validar_placa(con, placa):
+                print("Placa no registrada.")
+                continue
+            nueva = pedir_fecha("Ingrese nueva fecha de compra de la póliza (DD/MM/YYYY): ")
+            # convertir a YYYY-MM-DD
+            try:
+                nueva_ymd = datetime.strptime(nueva, "%Y-%m-%d").strftime("%Y-%m-%d") if "-" in nueva else datetime.strptime(nueva, "%Y-%m-%d").strftime("%Y-%m-%d")
+            except Exception:
+                # la función pedir_fecha retorna YYYY-MM-DD ya, así que simplemente pasar nueva
+                nueva_ymd = nueva
+            try:
+                Vehiculo.actualizar_poliza(con, placa, nueva_ymd)
+                print("Póliza actualizada.")
+            except Exception as e:
+                print("Error al actualizar póliza:", e)
+        elif opc == "4":
+            placa = input("Ingrese placa: ").strip()
+            if not Vehiculo.validar_placa(con, placa):
+                print("Placa no registrada.")
+                continue
+            nuevo_estado = input("Nuevo estado: Activo[1] Inactivo[2]: ").strip()
+            try:
+                Vehiculo.actualizar_indicador(con, placa, nuevo_estado)
+                print("Indicador actualizado.")
+            except Exception as e:
+                print("Error actualizando indicador:", e)
+        elif opc == "0":
+            break
+        else:
+            print("Opción inválida.")
+
+# ---------- Menú Conductores ----------
+def menu_conductores(con, db):
+    while True:
+        print("\n--- CONDUCTORES ---")
+        print("1. Registrar conductor")
+        print("2. Consultar conductor por identificación")
+        print("3. Actualizar (direccion/telefono/correo/fechas/adeuda/ahorrado)")
+        print("0. Volver")
+        opc = input("Opción: ").strip()
+        if opc == "1":
+            datos = leer_info_conductor_input(con)
+            c = Conductor(db, **datos)
+            try:
+                c.guardar()
+                print("Conductor guardado.")
+            except Exception as e:
+                print("Error guardando conductor:", e)
+        elif opc == "2":
+            idc = input("Ingrese identificación: ").strip()
+            fila = Conductor.consultar_por_pk(con, idc)
+            if not fila:
+                print("No encontrado.")
+            else:
+                campos = dict(zip(Conductor.campos, fila))
+                c = Conductor(db, **campos)
+                c.mostrar_info()
+        elif opc == "3":
+            idc = input("Ingrese identificación: ").strip()
+            fila = Conductor.consultar_por_pk(con, idc)
+            if not fila:
+                print("Conductor no existe.")
+                continue
+            print("Presione Enter para no modificar un campo.")
+            # mostrar actuales
+            for idx, campo in enumerate(Conductor.campos):
+                print(f"{campo}: {fila[idx]}")
+            nueva_dir = input(f"Direccion [{fila[3]}]: ").strip() or fila[3]
+            nuevo_tel = input(f"Telefono [{fila[4]}]: ").strip() or fila[4]
+            nuevo_correo = input(f"Correo [{fila[5]}]: ").strip() or fila[5]
+            nueva_ing = input(f"Fecha ingreso [{fila[7]}]: ").strip() or fila[7]
+            nueva_retr = input(f"Fecha retiro [{fila[8]}]: ").strip() or fila[8]
+            nuevo_val_adeuda = input(f"Valor a deuda [{fila[13]}]: ").strip() or fila[13]
+            nuevo_total_ahorr = input(f"Total ahorrado [{fila[14]}]: ").strip() or fila[14]
+            cur = con.cursor()
+            cur.execute('''UPDATE infoConductor
+                           SET direccion = ?, telefono = ?, correo = ?, fechaIngreso = ?, fechaRetiro = ?, valorAdeuda = ?, totalAhorrado = ?
+                           WHERE identificacion = ?''',
+                        (nueva_dir, nuevo_tel, nuevo_correo, nueva_ing, nueva_retr, nuevo_val_adeuda, nuevo_total_ahorr, idc))
+            con.commit()
+            print("Conductor actualizado.")
+        elif opc == "0":
+            break
+        else:
+            print("Opción inválida.")
+
+# ---------- Menú Mantenimientos ----------
+def menu_mantenimientos(con, db):
+    while True:
+        print("\n--- MANTENIMIENTOS ---")
+        print("1. Registrar mantenimiento")
+        print("2. Consultar por número de orden")
+        print("3. Listar todos (sumatoria valores)")
+        print("4. Consulta última fecha por placa")
+        print("5. Actualizar registro (descripcion/valor/fecha)")
+        print("6. Eliminar mantenimiento por número de orden")
+        print("0. Volver")
+        opc = input("Opción: ").strip()
+        if opc == "1":
+            datos = leer_info_mantenimiento_input(con)
+            m = Mantenimiento(db, **datos)
+            try:
+                m.guardar()
+                print("Mantenimiento guardado.")
+            except Exception as e:
+                print("Error guardando mantenimiento:", e)
+        elif opc == "2":
+            num = input("Ingrese número de orden: ").strip()
+            fila = Mantenimiento.consultar_por_pk(con, num)
+            if not fila:
+                print("No existe registro.")
+            else:
+                campos = dict(zip(Mantenimiento.campos, fila))
+                m = Mantenimiento(db, **campos)
+                m.mostrar_info()
+        elif opc == "3":
+            filas = Mantenimiento.listar_todos(con)
+            total = Mantenimiento.suma_valores(con)
+            print(f"Total mantenciones: {len(filas)}, suma valor facturado: {total}")
+            for fila in filas:
+                print(fila)
+        elif opc == "4":
+            placa = input("Ingrese placa: ").strip()
+            try:
+                maxf = Mantenimiento.max_fecha_por_placa(con, placa)
+                print("Última fecha de servicio:", maxf)
+            except Exception as e:
+                print("Error:", e)
+        elif opc == "5":
+            num = input("Ingrese número de orden a actualizar: ").strip()
+            cur = con.cursor()
+            cur.execute("SELECT * FROM mantenimientoVehiculo WHERE numeroOrden=?", (num,))
+            reg = cur.fetchone()
+            if not reg:
+                print("No existe.")
+                continue
+            print("Registro actual:", reg)
+            nuevaDesc = input(f"Descripcion [{reg[4]}]: ").strip() or reg[4]
+            nuevoValor = input(f"Valor [{reg[5]}]: ").strip() or reg[5]
+            nuevaFecha = input(f"Fecha (DD/MM/YYYY) [{reg[6]}]: ").strip()
+            if nuevaFecha != reg[6] and nuevaFecha != "":
+                nuevaFecha = pedir_fecha("Ingrese nueva fecha (DD/MM/YYYY): ")
+            else:
+                nuevaFecha = reg[6]
+            cur.execute('''UPDATE mantenimientoVehiculo
+                           SET descripcionServicio = ?, valorFacturado = ?, fechaServicio = ?
+                           WHERE numeroOrden = ?''', (nuevaDesc, nuevoValor, nuevaFecha, num))
+            con.commit()
+            print("Registro actualizado.")
+        elif opc == "6":
+            num = input("Ingrese número de orden a eliminar: ").strip()
+            fila = Mantenimiento.consultar_por_pk(con, num)
+            if not fila:
+                print("No existe.")
+                continue
+            confirmar = input(f"¿Eliminar mantenimiento {num}? (s/n): ").strip().lower()
+            if confirmar == "s":
+                Mantenimiento.borrar_por_numero(con, num)
+                print("Eliminado.")
+            else:
+                print("Cancelado.")
+        elif opc == "0":
+            break
+        else:
+            print("Opción inválida.")
+
+# ---------------------------
+# Generación de PDF: ficha integrada de vehículo
+# ---------------------------
+def generar_ficha_vehiculo_pdf(con):
+    if not REPORTLAB_AVAILABLE:
+        print("Reportlab no está instalado. Instale con: pip install reportlab")
         return
+    placa = input("Ingrese la placa del vehículo para la ficha: ").strip()
+    fila = Vehiculo.consultar_por_pk(con, placa)
+    if not fila:
+        print("Vehículo no encontrado.")
+        return
+    # obtener último mantenimiento
+    ultima_fecha = Mantenimiento.max_fecha_por_placa(con, placa)
+    # armar contenido
+    estilos = getSampleStyleSheet()
+    doc_name = f"Ficha_Vehiculo_{placa}.pdf"
+    doc = SimpleDocTemplate(doc_name, pagesize=letter)
+    story = []
+    story.append(Paragraph(f"Ficha integrada - Vehículo {placa}", estilos['Title']))
+    story.append(Spacer(1, 12))
+    # datos vehiculo
+    for i, campo in enumerate(Vehiculo.campos):
+        story.append(Paragraph(f"<b>{campo}:</b> {fila[i]}", estilos['Normal']))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"<b>Último mantenimiento:</b> {ultima_fecha}", estilos['Normal']))
+    doc.build(story)
+    print(f"PDF generado: {os.path.abspath(doc_name)}")
 
-    #--------------------------------------------
-    # 2. CONSULTAR CONDUCTOR ASIGNADO
-    #--------------------------------------------
-    cursor.execute("SELECT nombre, apellido, telefono, correo, fechaIngreso, fechaRetiro, indicadorContratado "
-                   "FROM infoConductor WHERE placaVehiculo=?", (placa,))
-    conductor = cursor.fetchone()
-
-    #--------------------------------------------
-    # 3. CONSULTAR ÚLTIMO MANTENIMIENTO
-    #--------------------------------------------
-    cursor.execute("""
-        SELECT descripcionServicio, valorFacturado, fechaServicio, nombreProveedor
-        FROM mantenimientoVehiculo
-        WHERE placaVehiculo=?
-        ORDER BY fechaServicio DESC
-        LIMIT 1
-    """, (placa,))
-    mantenimiento = cursor.fetchone()
-
-    #--------------------------------------------
-    # 4. CREAR PDF
-    #--------------------------------------------
-    filename = f"FichaVehiculo_{placa}.pdf"
-    doc = SimpleDocTemplate(filename, pagesize=letter)
-
-    styles = getSampleStyleSheet()
-    Story = []
-
-    # Título
-    Story.append(Paragraph(f"<b>FICHA DE VEHÍCULO - {placa}</b>", styles["Title"]))
-    Story.append(Spacer(1, 12))
-
-    #--------------------------------------------
-    # TABLA: Información del Vehículo
-    #--------------------------------------------
-    veh_tabla = [
-        ["Campo", "Valor"],
-        ["Placa", veh[0]],
-        ["Marca", veh[1]],
-        ["Referencia", veh[2]],
-        ["Modelo", veh[3]],
-        ["Número de Chasis", veh[4]],
-        ["Número de Motor", veh[5]],
-        ["Color", veh[6]],
-        ["Concesionario", veh[7]],
-        ["Fecha de Compra", veh[8]],
-        ["Garantía (meses)", veh[9]],
-        ["Fecha Compra Póliza", veh[10]],
-        ["Proveedor Póliza", veh[11]],
-        ["Fecha SOAT", veh[12]],
-        ["Proveedor SOAT", veh[13]],
-        ["Activo (1=Sí / 2=No)", veh[14]]
-    ]
-
-    tablaVeh = Table(veh_tabla, colWidths=[180, 300])
-    tablaVeh.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-        ("ALIGN", (0,0), (-1,-1), "LEFT"),
-    ]))
-
-    Story.append(Paragraph("<b>Información del Vehículo</b>", styles["Heading2"]))
-    Story.append(tablaVeh)
-    Story.append(Spacer(1, 15))
-
-    #--------------------------------------------
-    # TABLA: Información del Conductor
-    #--------------------------------------------
-    Story.append(Paragraph("<b>Información del Conductor Asignado</b>", styles["Heading2"]))
-
-    if conductor:
-        cond_tabla = [
-            ["Campo", "Valor"],
-            ["Nombre", conductor[0] + " " + conductor[1]],
-            ["Teléfono", conductor[2]],
-            ["Correo", conductor[3]],
-            ["Fecha Ingreso", conductor[4]],
-            ["Fecha Retiro", conductor[5]],
-            ["Estado (1=Sí, 2=No, 3=Despedido)", conductor[6]]
-        ]
-    else:
-        cond_tabla = [["No hay conductor asignado.", ""]]
-
-    tablaCond = Table(cond_tabla, colWidths=[180, 300])
-    tablaCond.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-    ]))
-
-    Story.append(tablaCond)
-    Story.append(Spacer(1, 15))
-
-    #--------------------------------------------
-    # TABLA: Último Mantenimiento
-    #--------------------------------------------
-    Story.append(Paragraph("<b>Último Mantenimiento Registrado</b>", styles["Heading2"]))
-
-    if mantenimiento:
-        man_tabla = [
-            ["Campo", "Valor"],
-            ["Descripción", mantenimiento[0]],
-            ["Valor Facturado", mantenimiento[1]],
-            ["Fecha", mantenimiento[2]],
-            ["Proveedor", mantenimiento[3]]
-        ]
-    else:
-        man_tabla = [["No hay mantenimientos registrados.", ""]]
-
-    tablaMant = Table(man_tabla, colWidths=[180, 300])
-    tablaMant.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-    ]))
-
-    Story.append(tablaMant)
-    Story.append(Spacer(1, 20))
-
-    #--------------------------------------------
-    # GENERAR PDF
-    #--------------------------------------------
-    doc.build(Story)
-    print(f"PDF generado exitosamente: {filename}")
-
-#============================================================================================
-#----------------------------MENU------------------------------------------------------------
-#============================================================================================
-
-def menu(con):
-
-    salirPrincipal=False
-    while not salirPrincipal:
-        opcPrincipal=input('''
-                    MENU PRINCIPAL TAXIS LA NACIONAL
-
-                    1- Menu de gestion de Vehiculos
-                    2- Menu de gestion de Conductores
-                    3- Menu de gestion de Mantenimientos
-                    4- Ficha de Vehiculo
-                    5- Salir
-
-                    Selecciones una opcion: >>> ''')
-        if (opcPrincipal=='1'):
-            salirVehiculos=False
-            while not salirVehiculos:
-                opcVehiculos=input('''
-                                MENU DE ADMINISTRACION DE VEHICULOS
-
-                                1- Crear un nuevo vehiculo
-                                2- Consultar informacion de un vehiculo
-                                3- Actualizar informacion de vehiculo
-                                4- Retornar al menu principal
-
-                                Seleccione una opcion: >>>''')
-                if (opcVehiculos=='1'):
-                    miVehiculo=leerInfoVehiculo()
-                    crearVehiculo(con,miVehiculo)
-                elif (opcVehiculos=='2'):
-                    consultarVehiculo(con)
-                elif (opcVehiculos=='3'):
-                    salirActVehiculos=False
-                    while not salirActVehiculos:
-                        opcActVehiculos=input('''
-                                MENU DE ADMINISTRACION DE ACTUALIZACION DE VEHICULOS
-                                ¿QUE DESEA MODIFICAR?
-                                
-                                1- Estado del vehiculo
-                                2- Informacion de la poliza de seguro
-                                3- Retornar al menu de administracion de vehiculos
-
-                                Seleccione una opccion: >>>''')
-                        if(opcActVehiculos=='1'):
-                            modificarIndicador(con)
-                        elif(opcActVehiculos=='2'):
-                            modificarPoliza(con)
-                        elif(opcActVehiculos=='3'):
-                            salirActVehiculos=True
-                elif (opcVehiculos=='4'):
-                    salirVehiculos=True
-                        
-
-            
-        elif (opcPrincipal=='2'):
-            salirConductores=False
-            while not salirConductores:
-                opcConductores=input('''
-                                MENU DE ADMINISTRACION DE CONDUCTORES
-
-                                1- Crear un nuevo conductor
-                                2- Actualizar informacion conductor
-                                3- Consultar informacion de un conductor
-                                4- Retornar al menu principal
-
-                                Seleccione una opccion: >>>''')
-                if (opcConductores=='1'):
-                    miConductor=leerInfoConductor(con)
-                    crearConductor(con,miConductor)
-                elif (opcConductores=='2'):
-                    actConduct(con)
-                elif (opcConductores=='3'):
-                    consultconductor(con)
-                elif (opcConductores=='4'):
-                    salirConductores=True
-                    
-        elif (opcPrincipal=='3'):
-            salirMantenimientos=False
-            while not salirMantenimientos:
-                opcMantenimientos=input('''
-                                 MENU DE MANTENIMIENTOS
-
-                                 1- Crear un mantenimiento
-                                 2- Consultar mantenimiento realizado
-                                 3- Retornar al menu principal
-
-                                 Seleccione una opcion: >>> ''')
-                if (opcMantenimientos=='1'):
-                    miMantenimiento=leerInfoMantenimiento(con)
-                    crearMantenimiento(con,miMantenimiento)
-                elif (opcMantenimientos=='2'):
-                    consultarMantenimientoRealizado1(con)
-                elif (opcMantenimientos=='3'):
-                    salirMantenimientos=True
-
-        elif (opcPrincipal=='4'):
-            generarFichaVehiculoPDF(con)
-            
-        elif (opcPrincipal=='5'):
-            salirPrincipal=True
-
+# ---------------------------
+# Punto de entrada
+# ---------------------------
 def main():
-    miCon=conexionDB()
-    crearTablaVehiculos(miCon)
-    crearTablaConductores(miCon)
-    crearTablaMantenimientos(miCon)
-    menu(miCon)
-    #crearTablaVehiculos1(miCon)
-    #insertarVehiculos(miCon)
-    #crearTablaMantenimiento(miCon)
-    #miMantenimiento=leerInfoMantenimiento()
-    #crearMantenimiento(miCon,miMantenimiento)
-    #actualizarMantenimiento(miCon)
-    #consultarMantenimientoRealizado(miCon)
-    #consultarMantenimientoRealizado1(miCon)
-    #consultarMantenimientoRealizado2(miCon)
-    #consultarMantenimientoRealizado3(miCon)
-    #borrarMantenimiento(miCon)
-    #borrarTablaVehiculos(miCon)
-    #crearTablaConductor(miCon)
-    #cc=leerInfoConductor()
-    #crearConductor(con,cc)
-    
-    
-    #leerInfoConductor()
-    #cerrarDB(miCon)
-    
-main()
+    db = Database()
+    con = db.conexion
+    crear_tablas_todas(con)
+    menu_principal(db)
+    db.cerrar()
+
+if __name__ == "__main__":
+    main()
+
