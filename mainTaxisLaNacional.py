@@ -3,6 +3,10 @@ from sqlite3 import Error
 import re #Validacion correo
 from datetime import datetime # Fechas y horas
 import os #Verificar ruta de BD
+#----QtableWidget----#
+from PyQt5.QtWidgets import QTableWidgetItem
+from QTable import * #Archivo de QTableWidget convertido a .py necesario
+import sys
 # --- IMPORTS PARA GENERAR PDF ---
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.pagesizes import letter # Define el tamaño y tipo de pagina
@@ -524,6 +528,38 @@ def leer_info_mantenimiento_input(con: sqlite3.Connection):
     }
     return datos
 
+#-------------------#
+#----QTableWidget---#
+#-------------------#
+def qtable (con):
+    filas = Mantenimiento.listar_todos(con)
+    data = [filas]
+   
+    class mywindow(QtWidgets.QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.ui = Ui_MainWindow()
+            self.ui.setupUi(self)
+            self.ui.tableWidget.setRowCount(7)
+            self.ui.tableWidget.setColumnCount(7)
+            columnas = ["Número de Orden","Placa", "NIT", "Proveedor", "Servicio","Valor Facturado", "Fecha de servicio" ]
+            self.ui.tableWidget.setVerticalHeaderLabels(columnas)  # set header text
+
+            for row, fila in enumerate(filas):
+                for col, valor  in enumerate(fila):
+                    item = QTableWidgetItem(str(valor))
+                    item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)  # no editable
+                    self.ui.tableWidget.setItem(row, col, item)
+
+            self.ui.tableWidget.setSortingEnabled(True)
+            self.ui.tableWidget.sortByColumn(0, QtCore.Qt.AscendingOrder) # sort by the first column    
+    app = QtWidgets.QApplication([])
+    win = mywindow()
+    win.show()
+    sys.exit(app.exec())
+
+
+
 # ---------------------------
 # OPERACIONES DE ALTO NIVEL / MENÚ
 # ---------------------------
@@ -686,6 +722,7 @@ def menu_mantenimientos(con, db):
         print("4. Consulta última fecha por placa")
         print("5. Actualizar registro (descripcion/valor/fecha)")
         print("6. Eliminar mantenimiento por número de orden")
+        print("7. Consulta de la base de datos total de mantenimiento")
         print("0. Volver")
         opc = input("Opción: ").strip()
         if opc == "1":
@@ -751,6 +788,8 @@ def menu_mantenimientos(con, db):
                 print("Eliminado.")
             else:
                 print("Cancelado.")
+        elif opc== "7":
+            qtable(con)
         elif opc == "0":
             break
         else:
