@@ -4,7 +4,8 @@ import re #Validacion correo
 from datetime import datetime # Fechas y horas
 import os #Verificar ruta de BD
 #----QtableWidget----#
-from PyQt5.QtWidgets import QTableWidgetItem
+from PyQt5.QtWidgets import QTableWidgetItem, QVBoxLayout, QHeaderView, QTableWidget
+# para ajustar tabla a ventana # Ajustar columnas
 from QTable import * #Archivo de QTableWidget convertido a .py necesario
 import sys
 # --- IMPORTS PARA GENERAR PDF ---
@@ -534,15 +535,25 @@ def leer_info_mantenimiento_input(con: sqlite3.Connection):
 def qtable (con):
     filas = Mantenimiento.listar_todos(con)
     data = [filas]
+    print(filas)
    
     class mywindow(QtWidgets.QMainWindow):
         def __init__(self):
             super().__init__()
+            self.tableWidget = QTableWidget() #Crear Widget
+            self.tableWidget.setRowCount(10)
+            self.tableWidget.setColumnCount(3)
+
+            self.layout = QVBoxLayout()
+            self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            self.layout.addWidget(self.tableWidget)  # self.tableWidget es tu QTableWidget
+            self.setLayout(self.layout)   
+            columnas = ["Número de Orden","Placa", "NIT", "Proveedor", "Servicio","Valor Facturado", "Fecha de servicio" ]
             self.ui = Ui_MainWindow()
             self.ui.setupUi(self)
-            self.ui.tableWidget.setRowCount(7)
-            self.ui.tableWidget.setColumnCount(7)
-            columnas = ["Número de Orden","Placa", "NIT", "Proveedor", "Servicio","Valor Facturado", "Fecha de servicio" ]
+            self.ui.tableWidget.setRowCount(len(columnas))
+            self.ui.tableWidget.setColumnCount(len(columnas))
+           
             self.ui.tableWidget.setVerticalHeaderLabels(columnas)  # set header text
 
             for row, fila in enumerate(filas):
