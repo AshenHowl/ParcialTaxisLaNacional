@@ -532,44 +532,64 @@ def leer_info_mantenimiento_input(con: sqlite3.Connection):
 #-------------------#
 #----QTableWidget---#
 #-------------------#
-def qtable (con):
+def qtable(con):
+    from PyQt5.QtWidgets import QTableWidgetItem, QTableWidget, QHeaderView, QApplication, QMainWindow, QVBoxLayout, QWidget
+    from PyQt5 import QtCore
+    import sys
+
+    # Consulta a la BD
     filas = Mantenimiento.listar_todos(con)
-    data = [filas]
-    print(filas)
-   
-    class mywindow(QtWidgets.QMainWindow):
+
+    # Definir columnas
+    columnas = [
+        "Número de Orden",
+        "Placa",
+        "NIT",
+        "Proveedor",
+        "Servicio",
+        "Valor Facturado",
+        "Fecha de Servicio"
+    ]
+
+    class VentanaTabla(QMainWindow):
         def __init__(self):
             super().__init__()
-            self.tableWidget = QTableWidget() #Crear Widget
-            self.tableWidget.setRowCount(10)
-            self.tableWidget.setColumnCount(3)
+            self.setWindowTitle("Consulta total de mantenimientos")
+            self.resize(900, 600)
 
-            self.layout = QVBoxLayout()
-            self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-            self.layout.addWidget(self.tableWidget)  # self.tableWidget es tu QTableWidget
-            self.setLayout(self.layout)   
-            columnas = ["Número de Orden","Placa", "NIT", "Proveedor", "Servicio","Valor Facturado", "Fecha de servicio" ]
-            self.ui = Ui_MainWindow()
-            self.ui.setupUi(self)
-            self.ui.tableWidget.setRowCount(len(columnas))
-            self.ui.tableWidget.setColumnCount(len(columnas))
-           
-            self.ui.tableWidget.setVerticalHeaderLabels(columnas)  # set header text
+            # ---- Widget central ----
+            contenedor = QWidget()
+            layout = QVBoxLayout(contenedor)
 
+            # ---- Tabla ----
+            self.tabla = QTableWidget()
+            self.tabla.setRowCount(len(filas))
+            self.tabla.setColumnCount(len(columnas))
+            self.tabla.setHorizontalHeaderLabels(columnas)
+
+            # Evitar edición
+            self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
+
+            # Ajustar columnas al tamaño disponible
+            self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+            # Habilitar ordenamiento
+            self.tabla.setSortingEnabled(True)
+
+            # Llenar tabla
             for row, fila in enumerate(filas):
-                for col, valor  in enumerate(fila):
+                for col, valor in enumerate(fila):
                     item = QTableWidgetItem(str(valor))
-                    item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)  # no editable
-                    self.ui.tableWidget.setItem(row, col, item)
+                    item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+                    self.tabla.setItem(row, col, item)
 
-            self.ui.tableWidget.setSortingEnabled(True)
-            self.ui.tableWidget.sortByColumn(0, QtCore.Qt.AscendingOrder) # sort by the first column    
-    app = QtWidgets.QApplication([])
-    win = mywindow()
-    win.show()
-    sys.exit(app.exec())
+            layout.addWidget(self.tabla)
+            self.setCentralWidget(contenedor)
 
-
+    app = QApplication(sys.argv)
+    ventana = VentanaTabla()
+    ventana.show()
+    sys.exit(app.exec_())
 
 # ---------------------------
 # OPERACIONES DE ALTO NIVEL / MENÚ
